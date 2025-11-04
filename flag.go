@@ -1078,7 +1078,9 @@ func (f *FlagSet) parseLongArg(s string, args []string, fn parseFunc) (outArgs [
 		case !exists && name == "help":
 			f.usage()
 			return outArgs, ErrHelp
-		case f.ParseErrorsWhitelist.UnknownFlags || (flag != nil && flag.Mode == ShorthandOnly):
+		case f.ParseErrorsWhitelist.UnknownFlags:
+			fallthrough
+		case f.ParseErrorsAllowlist.UnknownFlags || (flag != nil && flag.Mode == ShorthandOnly):
 			// --unknown=unknownval arg ...
 			// we do not want to lose arg in this case
 			if len(split) >= 2 {
