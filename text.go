@@ -65,9 +65,19 @@ func (f *FlagSet) TextVar(p encoding.TextUnmarshaler, name string, value encodin
 	f.VarP(newTextValue(value, p), name, "", usage)
 }
 
+// TextVarN is like TextVarP, but adds the name as shorthand (non-posix).
+func (f *FlagSet) TextVarN(p encoding.TextUnmarshaler, name, shorthand string, value encoding.TextMarshaler, usage string) {
+	f.VarN(newTextValue(value, p), name, shorthand, usage)
+}
+
 // TextVarP is like TextVar, but accepts a shorthand letter that can be used after a single dash.
 func (f *FlagSet) TextVarP(p encoding.TextUnmarshaler, name, shorthand string, value encoding.TextMarshaler, usage string) {
 	f.VarP(newTextValue(value, p), name, shorthand, usage)
+}
+
+// TextVarS is like TextVar, but accepts a shorthand letter to be used after a single dash, alone.
+func (f *FlagSet) TextVarS(p encoding.TextUnmarshaler, name, shorthand string, value encoding.TextMarshaler, usage string) {
+	f.VarS(newTextValue(value, p), name, shorthand, usage)
 }
 
 // TextVar defines a flag with a specified name, default value, and usage string. The argument p must be a pointer to a variable that will hold the value of the flag, and p must implement encoding.TextUnmarshaler. If the flag is used, the flag value will be passed to p's UnmarshalText method. The type of the default value must be the same as the type of p.
@@ -75,7 +85,17 @@ func TextVar(p encoding.TextUnmarshaler, name string, value encoding.TextMarshal
 	CommandLine.VarP(newTextValue(value, p), name, "", usage)
 }
 
+// TextVarN is like TextVarP, but adds the name as shorthand (non-posix).
+func TextVarN(p encoding.TextUnmarshaler, name, shorthand string, value encoding.TextMarshaler, usage string) {
+	CommandLine.VarN(newTextValue(value, p), name, shorthand, usage)
+}
+
 // TextVarP is like TextVar, but accepts a shorthand letter that can be used after a single dash.
 func TextVarP(p encoding.TextUnmarshaler, name, shorthand string, value encoding.TextMarshaler, usage string) {
 	CommandLine.VarP(newTextValue(value, p), name, shorthand, usage)
+}
+
+// TextVarS is like TextVar, but accepts a shorthand letter to be used after a single dash, alone.
+func TextVarS(p encoding.TextUnmarshaler, name, shorthand string, value encoding.TextMarshaler, usage string) {
+	CommandLine.VarS(newTextValue(value, p), name, shorthand, usage)
 }

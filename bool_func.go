@@ -19,10 +19,24 @@ func (f *FlagSet) BoolFunc(name string, usage string, fn func(string) error) {
 	f.BoolFuncP(name, "", usage, fn)
 }
 
+// BoolFuncN is like BoolFuncP, but adds the name as shorthand (non-posix).
+func (f *FlagSet) BoolFuncN(name, shorthand string, usage string, fn func(string) error) {
+	var val Value = boolfuncValue(fn)
+	flag := f.VarNF(val, name, shorthand, usage)
+	flag.NoOptDefVal = "true"
+}
+
 // BoolFuncP is like BoolFunc, but accepts a shorthand letter that can be used after a single dash.
 func (f *FlagSet) BoolFuncP(name, shorthand string, usage string, fn func(string) error) {
 	var val Value = boolfuncValue(fn)
 	flag := f.VarPF(val, name, shorthand, usage)
+	flag.NoOptDefVal = "true"
+}
+
+// BoolFuncS is like BoolFunc, but accepts a shorthand letter to be used after a single dash, alone.
+func (f *FlagSet) BoolFuncS(name, shorthand string, usage string, fn func(string) error) {
+	var val Value = boolfuncValue(fn)
+	flag := f.VarSF(val, name, shorthand, usage)
 	flag.NoOptDefVal = "true"
 }
 
@@ -34,7 +48,17 @@ func BoolFunc(name string, usage string, fn func(string) error) {
 	CommandLine.BoolFuncP(name, "", usage, fn)
 }
 
+// BoolFuncN is like BoolFuncP, but adds the name as shorthand (non-posix).
+func BoolFuncN(name, shorthand string, usage string, fn func(string) error) {
+	CommandLine.BoolFuncN(name, shorthand, usage, fn)
+}
+
 // BoolFuncP is like BoolFunc, but accepts a shorthand letter that can be used after a single dash.
 func BoolFuncP(name, shorthand string, usage string, fn func(string) error) {
 	CommandLine.BoolFuncP(name, shorthand, usage, fn)
+}
+
+// BoolFuncS is like BoolFunc, but accepts a shorthand letter to be used after a single dash, alone.
+func BoolFuncS(name, shorthand string, usage string, fn func(string) error) {
+	CommandLine.BoolFuncS(name, shorthand, usage, fn)
 }

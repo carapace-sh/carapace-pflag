@@ -83,9 +83,19 @@ func (f *FlagSet) TimeVar(p *time.Time, name string, value time.Time, formats []
 	f.TimeVarP(p, name, "", value, formats, usage)
 }
 
+// TimeVarN is like TimeVarP, but adds the name as shorthand (non-posix).
+func (f *FlagSet) TimeVarN(p *time.Time, name, shorthand string, value time.Time, formats []string, usage string) {
+	f.VarN(newTimeValue(value, p, formats), name, shorthand, usage)
+}
+
 // TimeVarP is like TimeVar, but accepts a shorthand letter that can be used after a single dash.
 func (f *FlagSet) TimeVarP(p *time.Time, name, shorthand string, value time.Time, formats []string, usage string) {
 	f.VarP(newTimeValue(value, p, formats), name, shorthand, usage)
+}
+
+// TimeVarS is like TimeVar, but accepts a shorthand letter to be used after a single dash, alone.
+func (f *FlagSet) TimeVarS(p *time.Time, name, shorthand string, value time.Time, formats []string, usage string) {
+	f.VarS(newTimeValue(value, p, formats), name, shorthand, usage)
 }
 
 // TimeVar defines a time.Time flag with specified name, default value, and usage string.
@@ -105,10 +115,24 @@ func (f *FlagSet) Time(name string, value time.Time, formats []string, usage str
 	return f.TimeP(name, "", value, formats, usage)
 }
 
+// TimeN is like TimeP, but adds the name as shorthand (non-posix).
+func (f *FlagSet) TimeN(name, shorthand string, value time.Time, formats []string, usage string) *time.Time {
+	p := new(time.Time)
+	f.TimeVarN(p, name, shorthand, value, formats, usage)
+	return p
+}
+
 // TimeP is like Time, but accepts a shorthand letter that can be used after a single dash.
 func (f *FlagSet) TimeP(name, shorthand string, value time.Time, formats []string, usage string) *time.Time {
 	p := new(time.Time)
 	f.TimeVarP(p, name, shorthand, value, formats, usage)
+	return p
+}
+
+// TimeS is like Time, but accepts a shorthand letter to be used after a single dash, alone.
+func (f *FlagSet) TimeS(name, shorthand string, value time.Time, formats []string, usage string) *time.Time {
+	p := new(time.Time)
+	f.TimeVarS(p, name, shorthand, value, formats, usage)
 	return p
 }
 
@@ -118,7 +142,17 @@ func Time(name string, value time.Time, formats []string, usage string) *time.Ti
 	return CommandLine.TimeP(name, "", value, formats, usage)
 }
 
+// TimeN is like TimeP, but adds the name as shorthand (non-posix).
+func TimeN(name, shorthand string, value time.Time, formats []string, usage string) *time.Time {
+	return CommandLine.TimeN(name, shorthand, value, formats, usage)
+}
+
 // TimeP is like Time, but accepts a shorthand letter that can be used after a single dash.
 func TimeP(name, shorthand string, value time.Time, formats []string, usage string) *time.Time {
 	return CommandLine.TimeP(name, shorthand, value, formats, usage)
+}
+
+// TimeS is like Time, but accepts a shorthand letter to be used after a single dash, alone.
+func TimeS(name, shorthand string, value time.Time, formats []string, usage string) *time.Time {
+	return CommandLine.TimeS(name, shorthand, value, formats, usage)
 }
