@@ -14,6 +14,7 @@ const (
 	flagNoSuchFlagMessage
 	flagUnknownFlagMessage
 	flagUnknownShorthandFlagMessage
+	flagUnknownShorthandFlagMessageNonPosix
 )
 
 // NotExistError is the error returned when trying to access a flag that
@@ -42,6 +43,9 @@ func (e *NotExistError) Error() string {
 	case flagUnknownShorthandFlagMessage:
 		c := rune(e.name[0])
 		return fmt.Sprintf("unknown shorthand flag: %q in -%s", c, e.specifiedShorthands)
+
+	case flagUnknownShorthandFlagMessageNonPosix:
+		return fmt.Sprintf("unknown shorthand flag: -%s", e.name)
 	}
 
 	panic(fmt.Errorf("unknown flagNotExistErrorMessageType: %v", e.messageType))
@@ -109,7 +113,14 @@ func (e *InvalidValueError) Error() string {
 	flag := e.flag
 	var flagName string
 	if flag.Shorthand != "" && flag.ShorthandDeprecated == "" {
-		flagName = fmt.Sprintf("-%s, --%s", flag.Shorthand, flag.Name)
+		flagName = fmt.Sprintf("-%s", flag.Shorthand)
+		if flag.Mode != ShorthandOnly {
+			if flag.Mode != NameAsShorthand {
+				flagName = fmt.Sprintf("%s, --%s", flagName, flag.Name)
+			} else {
+				flagName = fmt.Sprintf("%s, -%s", flagName, flag.Name)
+			}
+		}
 	} else {
 		flagName = fmt.Sprintf("--%s", flag.Name)
 	}

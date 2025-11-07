@@ -1200,9 +1200,8 @@ func (f *FlagSet) parseSingleShortArg(shorthands string, args []string, fn parse
 			} else {
 				// custom carapace-sh/carapace-pflag message for non-posix shorthand (chain disabled)
 				err = f.fail(&NotExistError{
-					name: name,
-					// specifiedShorthands: shorthands,
-					messageType: flagUnknownShorthandFlagMessage,
+					name:        name,
+					messageType: flagUnknownShorthandFlagMessageNonPosix,
 				})
 			}
 			return
