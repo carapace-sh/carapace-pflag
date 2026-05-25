@@ -162,3 +162,43 @@ func TestNargs(t *testing.T) {
 	}
 
 }
+
+func TestShorthandNameOverlap(t *testing.T) {
+	f := NewFlagSet("shorthandNameOverlap", ContinueOnError)
+	f.StringN("overlapping", "o", "", "overlapping flag")
+
+	args := []string{
+		"-overlapping", "value",
+	}
+	want := []string{
+		"overlapping", "value",
+	}
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name)
+		if len(value) > 0 {
+			got = append(got, value)
+		}
+		return nil
+	}
+	if err := f.ParseAll(args, store); err != nil {
+		t.Errorf("expected no error, got %s", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("f.TestShorthandNameOverlap() fail to restore the args")
+		t.Errorf("Got:  %v", got)
+		t.Errorf("Want: %v", want)
+	}
+
+	// ensure args are correctly parsed
+	f.Parse(args)
+	got2, err := f.GetString("overlapping")
+	if err != nil {
+		t.Error(err.Error())
+	}
+	want2 := "value"
+	if got2 != want2 {
+		t.Errorf("Got:  %v", got2)
+		t.Errorf("Want: %v", want2)
+	}
+}

@@ -1214,7 +1214,7 @@ func (f *FlagSet) parseSingleShortArg(shorthands string, args []string, fn parse
 		// '-f=arg'
 		value = strings.SplitN(shorthands, string(flag.OptargDelimiter), 2)[1]
 		outShorts = ""
-	} else if flag.NoOptDefVal != "" {
+	} else if flag.NoOptDefVal != "" && (f.IsPosix() || shorthands == flag.Shorthand) {
 		// '-f' (arg was optional)
 		value = flag.NoOptDefVal
 	} else if len(shorthands) > 1 && f.IsPosix() {
