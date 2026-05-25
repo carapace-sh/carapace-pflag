@@ -200,17 +200,18 @@ const (
 )
 
 // ArgumentStyle defines which flag argument variants are accepted.
-type ArgumentStyle int
+// It is a bitmask that can be combined with OR.
+// For example: AcceptDelimited | AcceptNext (accepts both delimiter and next arg styles).
+// The special value 0 (zero) accepts all variants.
+type ArgumentStyle uint
 
 const (
-	// AnyArgumentStyle accepts all flag argument variants (default)
-	AnyArgumentStyle ArgumentStyle = iota
-	// NextArgumentStyle accepts argument as next argument only (-f arg)
-	NextArgumentStyle
-	// DelimiterArgumentStyle accepts argument with delimiter attached (-f=arg)
-	DelimiterArgumentStyle
-	// AttachedArgumentStyle accepts argument attached directly to flag (-farg)
-	AttachedArgumentStyle
+	// AcceptNext allows argument as next argument (-f arg)
+	AcceptNext ArgumentStyle = 1 << iota
+	// AcceptDelimited allows argument with delimiter attached (-f=arg)
+	AcceptDelimited
+	// AcceptAttached allows argument attached directly to flag (-farg in POSIX mode)
+	AcceptAttached
 )
 
 // A Flag represents the state of a flag.
@@ -1110,14 +1111,17 @@ func (f *FlagSet) parseLongArg(s string, args []string, fn parseFunc) (outArgs [
 	}
 
 	var value string
+	acceptsDelimited := flag.ArgumentStyle == 0 || flag.ArgumentStyle&AcceptDelimited != 0
+	acceptsNext := flag.ArgumentStyle == 0 || flag.ArgumentStyle&AcceptNext != 0
+
 	switch {
-	case len(split) == 2 && (flag.ArgumentStyle == AnyArgumentStyle || flag.ArgumentStyle == DelimiterArgumentStyle):
+	case len(split) == 2 && acceptsDelimited:
 		// '--flag=arg'
 		value = split[1]
-	case flag.NoOptDefVal != "" && (flag.ArgumentStyle == AnyArgumentStyle || flag.ArgumentStyle == DelimiterArgumentStyle):
+	case flag.NoOptDefVal != "" && acceptsDelimited:
 		// '--flag' (arg was optional)
 		value = flag.NoOptDefVal
-	case len(outArgs) > 0 && (flag.ArgumentStyle == AnyArgumentStyle || flag.ArgumentStyle == NextArgumentStyle):
+	case len(outArgs) > 0 && acceptsNext:
 		// '--flag arg'
 		value, outArgs = parseNargs(flag, outArgs)
 	default:
@@ -1225,19 +1229,18 @@ func (f *FlagSet) parseSingleShortArg(shorthands string, args []string, fn parse
 	}
 
 	var value string
-	style := flag.ArgumentStyle
-	acceptsDelimiter := style == AnyArgumentStyle || style == DelimiterArgumentStyle
-	acceptsAttached := style == AnyArgumentStyle || style == AttachedArgumentStyle
-	acceptsNext := style == AnyArgumentStyle || style == NextArgumentStyle
+	acceptsDelimited := flag.ArgumentStyle == 0 || flag.ArgumentStyle&AcceptDelimited != 0
+	acceptsAttached := flag.ArgumentStyle == 0 || flag.ArgumentStyle&AcceptAttached != 0
+	acceptsNext := flag.ArgumentStyle == 0 || flag.ArgumentStyle&AcceptNext != 0
 
 	hasDelimiter := strings.Contains(shorthands, string(flag.OptargDelimiter))
 
-	if len(shorthands) > 2 && acceptsDelimiter &&
+	if len(shorthands) > 2 && acceptsDelimited &&
 		((shorthands[1] == '=' && f.IsPosix()) || (hasDelimiter && !f.IsPosix())) {
 		// '-f=arg'
 		value = strings.SplitN(shorthands, string(flag.OptargDelimiter), 2)[1]
 		outShorts = ""
-	} else if flag.NoOptDefVal != "" && acceptsDelimiter && (f.IsPosix() || shorthands == flag.Shorthand) {
+	} else if flag.NoOptDefVal != "" && acceptsDelimited && (f.IsPosix() || shorthands == flag.Shorthand) {
 		// '-f' (arg was optional)
 		value = flag.NoOptDefVal
 	} else if len(shorthands) > 1 && acceptsAttached && f.IsPosix() {

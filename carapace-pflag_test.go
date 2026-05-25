@@ -205,71 +205,131 @@ func TestShorthandNameOverlap(t *testing.T) {
 
 func TestArgumentStyle(t *testing.T) {
 	tests := []struct {
-		name         string
-		style        ArgumentStyle
-		args         []string
-		wantErr      bool
-		wantValue    string
-		description  string
+		name        string
+		style       ArgumentStyle
+		args        []string
+		wantErr     bool
+		wantValue   string
+		description string
 	}{
+		// Zero value (default) accepts all
 		{
-			name:        "AnyArgumentStyle accepts delimiter",
-			style:       AnyArgumentStyle,
+			name:        "zero accepts delimiter",
+			style:       0,
 			args:        []string{"--stringa=value"},
 			wantErr:     false,
 			wantValue:   "value",
 			description: "delimiter style should work",
 		},
 		{
-			name:        "AnyArgumentStyle accepts next arg",
-			style:       AnyArgumentStyle,
+			name:        "zero accepts next arg",
+			style:       0,
 			args:        []string{"--stringa", "value"},
 			wantErr:     false,
 			wantValue:   "value",
 			description: "next arg style should work",
 		},
 		{
-			name:        "NextArgumentStyle only accepts next arg",
-			style:       NextArgumentStyle,
+			name:        "zero accepts posix attached",
+			style:       0,
+			args:        []string{"-svalue"},
+			wantErr:     false,
+			wantValue:   "value",
+			description: "posix attached style should work",
+		},
+		// AcceptNext only
+		{
+			name:        "AcceptNext accepts next arg",
+			style:       AcceptNext,
 			args:        []string{"--stringa", "value"},
 			wantErr:     false,
 			wantValue:   "value",
 			description: "next arg style should work",
 		},
 		{
-			name:        "NextArgumentStyle rejects delimiter",
-			style:       NextArgumentStyle,
+			name:        "AcceptNext rejects delimiter",
+			style:       AcceptNext,
 			args:        []string{"--stringa=value"},
 			wantErr:     true,
 			description: "delimiter style should fail",
 		},
+		// AcceptDelimited only
 		{
-			name:        "DelimiterArgumentStyle only accepts delimiter",
-			style:       DelimiterArgumentStyle,
+			name:        "AcceptDelimited accepts delimiter",
+			style:       AcceptDelimited,
 			args:        []string{"--stringa=value"},
 			wantErr:     false,
 			wantValue:   "value",
 			description: "delimiter style should work",
 		},
 		{
-			name:        "DelimiterArgumentStyle rejects next arg",
-			style:       DelimiterArgumentStyle,
+			name:        "AcceptDelimited rejects next arg",
+			style:       AcceptDelimited,
 			args:        []string{"--stringa", "value"},
 			wantErr:     true,
 			description: "next arg style should fail",
 		},
+		// AcceptAttached only
 		{
-			name:        "AttachedArgumentStyle accepts posix attached",
-			style:       AttachedArgumentStyle,
+			name:        "AcceptAttached accepts posix attached",
+			style:       AcceptAttached,
 			args:        []string{"-svalue"},
 			wantErr:     false,
 			wantValue:   "value",
 			description: "posix attached style should work",
 		},
 		{
-			name:        "AttachedArgumentStyle rejects next arg",
-			style:       AttachedArgumentStyle,
+			name:        "AcceptAttached rejects next arg",
+			style:       AcceptAttached,
 			args:        []string{"-s", "value"},
+			wantErr:     true,
+			description: "next arg style should fail",
+		},
+		// Combined AcceptDelimited | AcceptNext
+		{
+			name:        "DelimitedOrNext accepts delimiter",
+			style:       AcceptDelimited | AcceptNext,
+			args:        []string{"--stringa=value"},
+			wantErr:     false,
+			wantValue:   "value",
+			description: "delimiter style should work",
+		},
+		{
+			name:        "DelimitedOrNext accepts next arg",
+			style:       AcceptDelimited | AcceptNext,
+			args:        []string{"--stringa", "value"},
+			wantErr:     false,
+			wantValue:   "value",
+			description: "next arg style should work",
+		},
+		{
+			name:        "DelimitedOrNext rejects attached",
+			style:       AcceptDelimited | AcceptNext,
+			args:        []string{"-svalue"},
+			wantErr:     true,
+			description: "attached style should fail",
+		},
+		// Combined AcceptDelimited | AcceptAttached
+		{
+			name:        "DelimitedOrAttached accepts delimiter",
+			style:       AcceptDelimited | AcceptAttached,
+			args:        []string{"--stringa=value"},
+			wantErr:     false,
+			wantValue:   "value",
+			description: "delimiter style should work",
+		},
+		{
+			name:        "DelimitedOrAttached accepts attached",
+			style:       AcceptDelimited | AcceptAttached,
+			args:        []string{"-svalue"},
+			wantErr:     false,
+			wantValue:   "value",
+			description: "attached style should work",
+		},
+		{
+			name:        "DelimitedOrAttached rejects next arg",
+			style:       AcceptDelimited | AcceptAttached,
+			args:        []string{"--stringa", "value"},
 			wantErr:     true,
 			description: "next arg style should fail",
 		},
