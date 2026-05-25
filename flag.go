@@ -214,6 +214,18 @@ const (
 	AcceptAttached
 )
 
+func (s ArgumentStyle) AcceptsDelimited() bool {
+	return s == 0 || s&AcceptDelimited != 0
+}
+
+func (s ArgumentStyle) AcceptsAttached() bool {
+	return s == 0 || s&AcceptAttached != 0
+}
+
+func (s ArgumentStyle) AcceptsNext() bool {
+	return s == 0 || s&AcceptNext != 0
+}
+
 // A Flag represents the state of a flag.
 type Flag struct {
 	Name                string              // name as it appears on command line
@@ -1229,9 +1241,9 @@ func (f *FlagSet) parseSingleShortArg(shorthands string, args []string, fn parse
 	}
 
 	var value string
-	acceptsDelimited := flag.ArgumentStyle == 0 || flag.ArgumentStyle&AcceptDelimited != 0
-	acceptsAttached := flag.ArgumentStyle == 0 || flag.ArgumentStyle&AcceptAttached != 0
-	acceptsNext := flag.ArgumentStyle == 0 || flag.ArgumentStyle&AcceptNext != 0
+	acceptsDelimited := flag.ArgumentStyle.AcceptsDelimited()
+	acceptsAttached := flag.ArgumentStyle.AcceptsAttached()
+	acceptsNext := flag.ArgumentStyle.AcceptsNext()
 
 	hasDelimiter := strings.Contains(shorthands, string(flag.OptargDelimiter))
 
