@@ -242,7 +242,7 @@ type Flag struct {
 	Annotations         map[string][]string // used by cobra.Command bash autocomple code
 	OptargDelimiter     rune
 	Nargs               int
-	ArgumentStyle       ArgumentStyle // controls which argument variants are accepted
+	ArgumentStyle       // controls which argument variants are accepted
 }
 
 // Value is the interface to the dynamic value stored in a flag.
@@ -1123,17 +1123,14 @@ func (f *FlagSet) parseLongArg(s string, args []string, fn parseFunc) (outArgs [
 	}
 
 	var value string
-	acceptsDelimited := flag.ArgumentStyle == 0 || flag.ArgumentStyle&AcceptDelimited != 0
-	acceptsNext := flag.ArgumentStyle == 0 || flag.ArgumentStyle&AcceptNext != 0
-
 	switch {
-	case len(split) == 2 && acceptsDelimited:
+	case len(split) == 2 && flag.AcceptsDelimited():
 		// '--flag=arg'
 		value = split[1]
-	case flag.NoOptDefVal != "" && acceptsDelimited:
+	case flag.NoOptDefVal != "" && flag.AcceptsDelimited():
 		// '--flag' (arg was optional)
 		value = flag.NoOptDefVal
-	case len(outArgs) > 0 && acceptsNext:
+	case len(outArgs) > 0 && flag.AcceptsNext():
 		// '--flag arg'
 		value, outArgs = parseNargs(flag, outArgs)
 	default:
@@ -1241,25 +1238,21 @@ func (f *FlagSet) parseSingleShortArg(shorthands string, args []string, fn parse
 	}
 
 	var value string
-	acceptsDelimited := flag.ArgumentStyle.AcceptsDelimited()
-	acceptsAttached := flag.ArgumentStyle.AcceptsAttached()
-	acceptsNext := flag.ArgumentStyle.AcceptsNext()
-
 	hasDelimiter := strings.Contains(shorthands, string(flag.OptargDelimiter))
 
-	if len(shorthands) > 2 && acceptsDelimited &&
+	if len(shorthands) > 2 && flag.AcceptsDelimited() &&
 		((shorthands[1] == '=' && f.IsPosix()) || (hasDelimiter && !f.IsPosix())) {
 		// '-f=arg'
 		value = strings.SplitN(shorthands, string(flag.OptargDelimiter), 2)[1]
 		outShorts = ""
-	} else if flag.NoOptDefVal != "" && acceptsDelimited && (f.IsPosix() || shorthands == flag.Shorthand) {
+	} else if flag.NoOptDefVal != "" && flag.AcceptsDelimited() && (f.IsPosix() || shorthands == flag.Shorthand) {
 		// '-f' (arg was optional)
 		value = flag.NoOptDefVal
-	} else if len(shorthands) > 1 && acceptsAttached && f.IsPosix() {
+	} else if len(shorthands) > 1 && flag.AcceptsAttached() && f.IsPosix() {
 		// '-farg' (posix mode)
 		value = shorthands[1:]
 		outShorts = ""
-	} else if len(args) > 0 && acceptsNext {
+	} else if len(args) > 0 && flag.AcceptsNext() {
 		// '-f arg'
 		value, outArgs = parseNargs(flag, args)
 	} else {
