@@ -1469,6 +1469,11 @@ func NewFlagSet(name string, errorHandling ErrorHandling) *FlagSet {
 	return f
 }
 
+// IsInterspersed returns whether interspersed option/non-option arguments are allowed.
+func (f *FlagSet) IsInterspersed() bool {
+	return f.interspersed
+}
+
 // SetInterspersed sets whether to support interspersed option/non-option arguments.
 func (f *FlagSet) SetInterspersed(interspersed bool) {
 	f.interspersed = interspersed
