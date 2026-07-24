@@ -23,10 +23,15 @@ type NotExistError struct {
 	name                string
 	specifiedShorthands string
 	messageType         notExistErrorMessageType
+	prefix              rune
 }
 
 // Error implements error.
 func (e *NotExistError) Error() string {
+	prefix := e.prefix
+	if prefix == 0 {
+		prefix = '-'
+	}
 	switch e.messageType {
 	case flagNotExistMessage:
 		return fmt.Sprintf("flag %q does not exist", e.name)
@@ -35,17 +40,17 @@ func (e *NotExistError) Error() string {
 		return fmt.Sprintf("flag accessed but not defined: %s", e.name)
 
 	case flagNoSuchFlagMessage:
-		return fmt.Sprintf("no such flag -%v", e.name)
+		return fmt.Sprintf("no such flag %c%v", prefix, e.name)
 
 	case flagUnknownFlagMessage:
-		return fmt.Sprintf("unknown flag: --%s", e.name)
+		return fmt.Sprintf("unknown flag: %c%c%s", prefix, prefix, e.name)
 
 	case flagUnknownShorthandFlagMessage:
 		c := rune(e.name[0])
-		return fmt.Sprintf("unknown shorthand flag: %q in -%s", c, e.specifiedShorthands)
+		return fmt.Sprintf("unknown shorthand flag: %q in %c%s", c, prefix, e.specifiedShorthands)
 
 	case flagUnknownShorthandFlagMessageNonPosix:
-		return fmt.Sprintf("unknown shorthand flag: -%s", e.name)
+		return fmt.Sprintf("unknown shorthand flag: %c%s", prefix, e.name)
 	}
 
 	panic(fmt.Errorf("unknown flagNotExistErrorMessageType: %v", e.messageType))
@@ -70,16 +75,21 @@ type ValueRequiredError struct {
 	flag                *Flag
 	specifiedName       string
 	specifiedShorthands string
+	prefix              rune
 }
 
 // Error implements error.
 func (e *ValueRequiredError) Error() string {
+	prefix := e.prefix
+	if prefix == 0 {
+		prefix = '-'
+	}
 	if len(e.specifiedShorthands) > 0 {
 		c := rune(e.specifiedName[0])
-		return fmt.Sprintf("flag needs an argument: %q in -%s", c, e.specifiedShorthands)
+		return fmt.Sprintf("flag needs an argument: %q in %c%s", c, prefix, e.specifiedShorthands)
 	}
 
-	return fmt.Sprintf("flag needs an argument: --%s", e.specifiedName)
+	return fmt.Sprintf("flag needs an argument: %c%c%s", prefix, prefix, e.specifiedName)
 }
 
 // GetFlag returns the flag for which the error occurred.
@@ -103,26 +113,31 @@ func (e *ValueRequiredError) GetSpecifiedShortnames() string {
 // InvalidValueError is the error returned when an invalid value is used
 // for a flag.
 type InvalidValueError struct {
-	flag  *Flag
-	value string
-	cause error
+	flag   *Flag
+	value  string
+	cause  error
+	prefix rune
 }
 
 // Error implements error.
 func (e *InvalidValueError) Error() string {
+	prefix := e.prefix
+	if prefix == 0 {
+		prefix = '-'
+	}
 	flag := e.flag
 	var flagName string
 	if flag.Shorthand != "" && flag.ShorthandDeprecated == "" {
-		flagName = fmt.Sprintf("-%s", flag.Shorthand)
+		flagName = fmt.Sprintf("%c%s", prefix, flag.Shorthand)
 		if flag.Mode != ShorthandOnly {
 			if flag.Mode != NameAsShorthand {
-				flagName = fmt.Sprintf("%s, --%s", flagName, flag.Name)
+				flagName = fmt.Sprintf("%s, %c%c%s", flagName, prefix, prefix, flag.Name)
 			} else {
-				flagName = fmt.Sprintf("%s, -%s", flagName, flag.Name)
+				flagName = fmt.Sprintf("%s, %c%s", flagName, prefix, flag.Name)
 			}
 		}
 	} else {
-		flagName = fmt.Sprintf("--%s", flag.Name)
+		flagName = fmt.Sprintf("%c%c%s", prefix, prefix, flag.Name)
 	}
 	return fmt.Sprintf("invalid argument %q for %q flag: %v", e.value, flagName, e.cause)
 }
