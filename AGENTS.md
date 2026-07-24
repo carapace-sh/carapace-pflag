@@ -39,7 +39,7 @@ Each value type lives in its own file, paired with a `_test.go`:
 | `errors.go` | — | Structured error types (replaces upstream's `fmt.Errorf`) |
 | `golangflag.go` | — | Adapter for stdlib `flag.Value` interop |
 | `export_test.go` | — | Internal helpers exported only during testing |
-| `carapace-pflag_test.go` | — | Fork-specific feature tests (long shorthand, non-POSIX, Nargs, ArgumentStyle) |
+| `carapace-pflag_test.go` | — | Fork-specific feature tests (long shorthand, non-POSIX, Nargs, ArgumentStyle, custom prefix) |
 
 ### Per-type method matrix (critical to replicate)
 
@@ -70,6 +70,22 @@ These unexported/exported fields on `Flag` are the fork's reason for existing (d
 
 `FlagSet.IsPosix()` returns false if **any** shorthand is multi-character (which happens when `NameAsShorthand`/`ShorthandOnly` registers long shorthand names). When non-POSIX, shorthand chaining (`-abc` = `-a -b -c`) is disabled.
 
+### Custom Flag Prefix (`FlagSet.prefix`)
+
+The `FlagSet` has an unexported `prefix rune` field (default `'-'`) controlling the flag prefix character. Use `f.SetPrefix('&')` to switch to a different prefix (e.g. `&` for elvish). The prefix affects:
+
+- Token recognition: `s[0] == prefix` decides flag vs positional arg
+- Long/short disambiguation: `s[1] == prefix` means long form (`&&flag`), otherwise short (`&f`)
+- Terminator: double-prefix (`&&`) terminates flag parsing
+- Error messages: all structured errors carry a `prefix rune` field and render with it
+- Usage output: `FlagUsagesWrapped` renders the configured prefix
+
+`Prefix()` returns `'-'` when `prefix == 0` (zero-value safety for `FlagSet{}` literals). `SetPrefix` is also available as a top-level function (delegates to `CommandLine`).
+
+`parseNargs` and `stripUnknownFlagValue` are methods on `*FlagSet` (not free functions) so they can access `f.Prefix()`. The greedy-Nargs stop condition uses `strings.HasPrefix(args[i], string(f.Prefix()))`.
+
+**What stays hardcoded**: `golangflag.go` always uses `-` for go test flags and stdlib interop — this is not affected by the custom prefix.
+
 ### `ArgumentStyle` bitmask (current focus)
 
 ```go
@@ -97,7 +113,7 @@ The fork replaces upstream's string-based `fmt.Errorf` with typed errors so cara
 | `InvalidValueError` | `"invalid argument"` | `GetFlag()`, `GetValue()`, `Unwrap()` |
 | `InvalidSyntaxError` | `"bad flag syntax"` | `GetSpecifiedFlag()` |
 
-`NotExistError` has a `notExistErrorMessageType` enum with 6 variants, including a non-POSIX-specific shorthand message — error messages adapt to `Flag.Mode`. `InvalidValueError` renders `-s, --name` for `Default` mode but just `-s` for `ShorthandOnly`.
+`NotExistError` has a `notExistErrorMessageType` enum with 6 variants, including a non-POSIX-specific shorthand message — error messages adapt to `Flag.Mode`. `InvalidValueError` renders `-s, --name` for `Default` mode but just `-s` for `ShorthandOnly`. All error types carry a `prefix rune` field (defaulting to `'-'` when zero) so messages render with the correct flag prefix (e.g. `&` instead of `-`).
 
 ## Testing Conventions
 
@@ -114,7 +130,7 @@ The fork replaces upstream's string-based `fmt.Errorf` with typed errors so cara
 - **`NameAsShorthand` disables POSIX chaining globally** for the whole `FlagSet`, not just that flag — because it registers the flag name in the `shorthands` map, making `IsPosix()` return false for the set.
 - **`ParseErrorsWhitelist` is a deprecated alias** for `ParseErrorsAllowlist` (type alias, kept for backwards compat). Use `Allowlist` in new code; do not remove the alias.
 - **Deprecated stdlib usage is tolerated**: `export_test.go` uses `ioutil.Discard` and `golangflag.go` uses `reflect.Ptr` — gopls flags these as deprecated, but they exist for Go 1.12 compatibility. Don't "modernize" them without checking the minimum Go version constraint.
-- **carapace reads unexported fields via reflection**: the carapace library's `internal/pflagfork` accesses `Flag.Mode`, `Flag.Nargs`, `Flag.OptargDelimiter`, `FlagSet.interspersed`, and calls `FlagSet.IsPosix()` reflectively. Changing field names or method signatures here silently breaks carapace. The `carapace-spec` library has a separate slim read-only fork for code generation.
+- **carapace reads unexported fields via reflection**: the carapace library's `internal/pflagfork` accesses `Flag.Mode`, `Flag.Nargs`, `Flag.OptargDelimiter`, `FlagSet.interspersed`, `FlagSet.prefix`, and calls `FlagSet.IsPosix()` reflectively. Changing field names or method signatures here silently breaks carapace. The `carapace-spec` library has a separate slim read-only fork for code generation.
 - **`NoOptDefVal` is set per-type, not per-flag**: registration methods for bool (`"true"`) and count (`"+1"`) types set this sentinel after construction so the bare flag form works (`--verbose`, `-v` repeating). For non-bool types it stays empty by default, but tests and callers routinely set it post-hoc via `f.Lookup("name").NoOptDefVal = "1"` to make a flag's value optional. The `count` type's `Set` specially interprets the `"+1"` sentinel to mean "increment" — do not reuse that value for other types.
 - **Value type families use different `Set` encodings**:
   - **Scalar** (`bool`, `int`, `duration`, …): straightforward `strconv` parse.

@@ -3,6 +3,7 @@ package pflag
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -1292,4 +1293,199 @@ func indexOf(s, substr string) int {
 		}
 	}
 	return -1
+}
+
+func TestCustomPrefix(t *testing.T) {
+	tests := []struct {
+		name   string
+		prefix rune
+		setup  func(f *FlagSet)
+		args   []string
+		want   []string
+	}{
+		{
+			name:   "ampersand long flag with next arg",
+			prefix: '&',
+			setup:  func(f *FlagSet) { f.IntP("flag", "f", 0, "flag") },
+			args:   []string{"&&flag", "42"},
+			want:   []string{"flag", "42"},
+		},
+		{
+			name:   "ampersand long flag with delimiter",
+			prefix: '&',
+			setup:  func(f *FlagSet) { f.IntP("flag", "f", 0, "flag") },
+			args:   []string{"&&flag=42"},
+			want:   []string{"flag", "42"},
+		},
+		{
+			name:   "ampersand shorthand with next arg",
+			prefix: '&',
+			setup:  func(f *FlagSet) { f.IntP("flag", "f", 0, "flag") },
+			args:   []string{"&f", "42"},
+			want:   []string{"flag", "42"},
+		},
+		{
+			name:   "ampersand shorthand with delimiter",
+			prefix: '&',
+			setup:  func(f *FlagSet) { f.IntP("flag", "f", 0, "flag") },
+			args:   []string{"&f=42"},
+			want:   []string{"flag", "42"},
+		},
+		{
+			name:   "ampersand NameAsShorthand single prefix",
+			prefix: '&',
+			setup:  func(f *FlagSet) { f.IntN("flag", "f", 0, "flag") },
+			args:   []string{"&flag=42"},
+			want:   []string{"flag", "42"},
+		},
+		{
+			name:   "ampersand ShorthandOnly single prefix",
+			prefix: '&',
+			setup:  func(f *FlagSet) { f.IntS("flag", "f", 0, "flag") },
+			args:   []string{"&f=42"},
+			want:   []string{"flag", "42"},
+		},
+		{
+			name:   "ampersand bool flag",
+			prefix: '&',
+			setup:  func(f *FlagSet) { f.BoolP("verbose", "v", false, "verbose") },
+			args:   []string{"&v"},
+			want:   []string{"verbose", "true"},
+		},
+		{
+			name:   "ampersand terminator",
+			prefix: '&',
+			setup:  func(f *FlagSet) { f.IntP("flag", "f", 0, "flag") },
+			args:   []string{"&f=1", "&&", "&f", "2"},
+			want:   []string{"flag", "1"},
+		},
+		{
+			name:   "ampersand positional args",
+			prefix: '&',
+			setup:  func(f *FlagSet) { f.IntP("flag", "f", 0, "flag") },
+			args:   []string{"positional", "&f=42", "more"},
+			want:   []string{"flag", "42"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := NewFlagSet("test", ContinueOnError)
+			f.SetPrefix(tt.prefix)
+			tt.setup(f)
+
+			got := []string{}
+			store := func(flag *Flag, value string) error {
+				got = append(got, flag.Name)
+				if len(value) > 0 {
+					got = append(got, value)
+				}
+				return nil
+			}
+
+			err := f.ParseAll(tt.args, store)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCustomPrefixErrors(t *testing.T) {
+	// Unknown flag with ampersand prefix
+	f := NewFlagSet("test", ContinueOnError)
+	f.SetPrefix('&')
+	f.IntP("flag", "f", 0, "flag")
+
+	err := f.Parse([]string{"&&unknown=42"})
+	if err == nil {
+		t.Fatal("expected error for unknown flag")
+	}
+	var nee *NotExistError
+	if !errors.As(err, &nee) {
+		t.Fatalf("expected NotExistError, got %T: %v", err, err)
+	}
+	if !strings.Contains(err.Error(), "&&unknown") {
+		t.Errorf("error %q should contain '&&unknown'", err.Error())
+	}
+
+	// Unknown shorthand with ampersand prefix
+	err = f.Parse([]string{"&x=42"})
+	if err == nil {
+		t.Fatal("expected error for unknown shorthand")
+	}
+	if !strings.Contains(err.Error(), "&x") {
+		t.Errorf("error %q should contain '&x'", err.Error())
+	}
+}
+
+func TestCustomPrefixUsage(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.SetPrefix('&')
+	f.IntP("flag", "f", 0, "a flag")
+	f.Int("other", 0, "another flag")
+
+	usage := f.FlagUsages()
+	if !strings.Contains(usage, "&f") {
+		t.Errorf("usage should contain '&f', got:\n%s", usage)
+	}
+	if !strings.Contains(usage, "&&flag") {
+		t.Errorf("usage should contain '&&flag', got:\n%s", usage)
+	}
+	if !strings.Contains(usage, "&&other") {
+		t.Errorf("usage should contain '&&other', got:\n%s", usage)
+	}
+}
+
+func TestCustomPrefixValueRequiredError(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.SetPrefix('&')
+	f.IntP("flag", "f", 0, "flag")
+
+	err := f.Parse([]string{"&f"})
+	if err == nil {
+		t.Fatal("expected error for missing argument")
+	}
+	var vre *ValueRequiredError
+	if !errors.As(err, &vre) {
+		t.Fatalf("expected ValueRequiredError, got %T: %v", err, err)
+	}
+	if !strings.Contains(err.Error(), "&f") {
+		t.Errorf("error %q should contain '&f'", err.Error())
+	}
+}
+
+func TestCustomPrefixInvalidValueError(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.SetPrefix('&')
+	f.IntP("flag", "f", 0, "flag")
+
+	err := f.ParseAll([]string{"&f=abc"}, func(flag *Flag, value string) error {
+		return &InvalidValueError{
+			flag:   flag,
+			value:  value,
+			cause:  errors.New("strconv error"),
+			prefix: f.Prefix(),
+		}
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var ive *InvalidValueError
+	if !errors.As(err, &ive) {
+		t.Fatalf("expected InvalidValueError, got %T: %v", err, err)
+	}
+	if !strings.Contains(err.Error(), "&f") {
+		t.Errorf("error %q should contain '&f'", err.Error())
+	}
+}
+
+func TestDefaultPrefixIsDash(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	if f.Prefix() != '-' {
+		t.Errorf("expected default prefix '-', got %q", f.Prefix())
+	}
 }
