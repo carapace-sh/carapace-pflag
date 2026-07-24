@@ -199,6 +199,33 @@ const (
 	NameAsShorthand             // non-posix mode where the name is also added as shorthand (single `-` prefix)
 )
 
+// ArgumentStyle defines which flag argument variants are accepted.
+// It is a bitmask that can be combined with OR.
+// For example: AcceptDelimited | AcceptNext (accepts both delimiter and next arg styles).
+// The special value 0 (zero) accepts all variants.
+type ArgumentStyle uint
+
+const (
+	// AcceptNext allows argument as next argument (-f arg)
+	AcceptNext ArgumentStyle = 1 << iota
+	// AcceptDelimited allows argument with delimiter attached (-f=arg)
+	AcceptDelimited
+	// AcceptAttached allows argument attached directly to flag (-farg in POSIX mode)
+	AcceptAttached
+)
+
+func (s ArgumentStyle) AcceptsDelimited() bool {
+	return s == 0 || s&AcceptDelimited != 0
+}
+
+func (s ArgumentStyle) AcceptsAttached() bool {
+	return s == 0 || s&AcceptAttached != 0
+}
+
+func (s ArgumentStyle) AcceptsNext() bool {
+	return s == 0 || s&AcceptNext != 0
+}
+
 // A Flag represents the state of a flag.
 type Flag struct {
 	Name                string              // name as it appears on command line
@@ -215,6 +242,7 @@ type Flag struct {
 	Annotations         map[string][]string // used by cobra.Command bash autocomple code
 	OptargDelimiter     rune
 	Nargs               int
+	ArgumentStyle       // controls which argument variants are accepted
 }
 
 // Value is the interface to the dynamic value stored in a flag.
@@ -1095,17 +1123,18 @@ func (f *FlagSet) parseLongArg(s string, args []string, fn parseFunc) (outArgs [
 	}
 
 	var value string
-	if len(split) == 2 {
+	switch {
+	case len(split) == 2 && flag.AcceptsDelimited():
 		// '--flag=arg'
 		value = split[1]
-	} else if flag.NoOptDefVal != "" {
+	case flag.NoOptDefVal != "" && flag.AcceptsDelimited():
 		// '--flag' (arg was optional)
 		value = flag.NoOptDefVal
-	} else if len(outArgs) > 0 {
+	case len(outArgs) > 0 && flag.AcceptsNext():
 		// '--flag arg'
 		value, outArgs = parseNargs(flag, outArgs)
-	} else {
-		// '--flag' (arg was required)
+	default:
+		// '--flag' (arg was required or not provided in accepted style)
 		err = f.fail(&ValueRequiredError{
 			flag:          flag,
 			specifiedName: name,
@@ -1209,23 +1238,25 @@ func (f *FlagSet) parseSingleShortArg(shorthands string, args []string, fn parse
 	}
 
 	var value string
-	if len(shorthands) > 2 &&
-		((shorthands[1] == '=' && f.IsPosix()) || (strings.Contains(shorthands, string(flag.OptargDelimiter)) && !f.IsPosix())) {
+	hasDelimiter := strings.Contains(shorthands, string(flag.OptargDelimiter))
+
+	if len(shorthands) > 2 && flag.AcceptsDelimited() &&
+		((shorthands[1] == '=' && f.IsPosix()) || (hasDelimiter && !f.IsPosix())) {
 		// '-f=arg'
 		value = strings.SplitN(shorthands, string(flag.OptargDelimiter), 2)[1]
 		outShorts = ""
-	} else if flag.NoOptDefVal != "" && (f.IsPosix() || shorthands == flag.Shorthand) {
+	} else if flag.NoOptDefVal != "" && flag.AcceptsDelimited() && (f.IsPosix() || shorthands == flag.Shorthand) {
 		// '-f' (arg was optional)
 		value = flag.NoOptDefVal
-	} else if len(shorthands) > 1 && f.IsPosix() {
-		// '-farg'
+	} else if len(shorthands) > 1 && flag.AcceptsAttached() && f.IsPosix() {
+		// '-farg' (posix mode)
 		value = shorthands[1:]
 		outShorts = ""
-	} else if len(args) > 0 {
+	} else if len(args) > 0 && flag.AcceptsNext() {
 		// '-f arg'
 		value, outArgs = parseNargs(flag, args)
 	} else {
-		// '-f' (arg was required)
+		// '-f' (arg was required or not provided in accepted style)
 		err = f.fail(&ValueRequiredError{
 			flag:                flag,
 			specifiedName:       name,
