@@ -1489,3 +1489,214 @@ func TestDefaultPrefixIsDash(t *testing.T) {
 		t.Errorf("expected default prefix '-', got %q", f.Prefix())
 	}
 }
+
+func TestCustomPrefixGreedyNargs(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.SetPrefix('&')
+	var vals []string
+	f.StringSliceVarP(&vals, "vals", "v", []string{}, "values")
+	f.Lookup("vals").Nargs = -1
+	f.IntP("other", "o", 0, "other flag")
+
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name)
+		if len(value) > 0 {
+			got = append(got, value)
+		}
+		return nil
+	}
+
+	err := f.ParseAll([]string{"&&vals", "a", "b", "&&other=3"}, store)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"vals", "a,b", "other", "3"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestCustomPrefixOptargDelimiter(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.SetPrefix('&')
+	f.StringP("flag", "f", "0", "flag")
+	f.Lookup("flag").OptargDelimiter = ':'
+
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name, value)
+		return nil
+	}
+
+	err := f.ParseAll([]string{"&f:val"}, store)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"flag", "val"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+
+	got = nil
+	err = f.ParseAll([]string{"&&flag:val"}, store)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want = []string{"flag", "val"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestCustomPrefixCount(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want int
+	}{
+		{name: "bare shorthand", args: []string{"&c"}, want: 1},
+		{name: "chained shorthand", args: []string{"&ccc"}, want: 3},
+		{name: "bare long", args: []string{"&&count"}, want: 1},
+		{name: "delimited long", args: []string{"&&count=5"}, want: 5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := NewFlagSet("test", ContinueOnError)
+			f.SetPrefix('&')
+			var c int
+			f.CountVarP(&c, "count", "c", "count")
+
+			err := f.Parse(tt.args)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if c != tt.want {
+				t.Errorf("got %d, want %d", c, tt.want)
+			}
+		})
+	}
+}
+
+func TestCustomPrefixHelp(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.SetPrefix('&')
+
+	err := f.Parse([]string{"&&help"})
+	if err != ErrHelp {
+		t.Fatalf("expected ErrHelp, got %v", err)
+	}
+
+	err = f.Parse([]string{"&h"})
+	if err != ErrHelp {
+		t.Fatalf("expected ErrHelp, got %v", err)
+	}
+}
+
+func TestCustomPrefixInvalidSyntax(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.SetPrefix('&')
+	f.IntP("flag", "f", 0, "flag")
+
+	err := f.Parse([]string{"&&&flag=42"})
+	if err == nil {
+		t.Fatal("expected error for triple prefix")
+	}
+	var ise *InvalidSyntaxError
+	if !errors.As(err, &ise) {
+		t.Fatalf("expected InvalidSyntaxError, got %T: %v", err, err)
+	}
+}
+
+func TestCustomPrefixLonePrefixIsPositional(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.SetPrefix('&')
+	f.IntP("flag", "f", 0, "flag")
+
+	err := f.Parse([]string{"&"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(f.Args()) != 1 || f.Args()[0] != "&" {
+		t.Errorf("expected positional ['&'], got %v", f.Args())
+	}
+}
+
+func TestCustomPrefixBoolChaining(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.SetPrefix('&')
+	f.BoolP("a", "a", false, "a")
+	f.BoolP("b", "b", false, "b")
+	f.BoolP("c", "c", false, "c")
+
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name, value)
+		return nil
+	}
+
+	err := f.ParseAll([]string{"&abc"}, store)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"a", "true", "b", "true", "c", "true"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestCustomPrefixInterspersedFalse(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.SetPrefix('&')
+	f.SetInterspersed(false)
+	f.IntP("flag", "f", 0, "flag")
+
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name, value)
+		return nil
+	}
+
+	err := f.ParseAll([]string{"&f=1", "positional", "&f=2"}, store)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"flag", "1"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if len(f.Args()) != 2 {
+		t.Errorf("expected 2 positional args, got %d: %v", len(f.Args()), f.Args())
+	}
+}
+
+func TestCustomPrefixArgumentStyleReject(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.SetPrefix('&')
+	f.IntP("flag", "f", 0, "flag")
+	f.Lookup("flag").ArgumentStyle = AcceptNext // only next-arg form, reject delimited
+
+	err := f.Parse([]string{"&f=42"})
+	if err == nil {
+		t.Fatal("expected error for rejected delimited form")
+	}
+	var vre *ValueRequiredError
+	if !errors.As(err, &vre) {
+		t.Fatalf("expected ValueRequiredError, got %T: %v", err, err)
+	}
+
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name, value)
+		return nil
+	}
+	err = f.ParseAll([]string{"&f", "42"}, store)
+	if err != nil {
+		t.Fatalf("unexpected error for next-arg form: %v", err)
+	}
+	want := []string{"flag", "42"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
