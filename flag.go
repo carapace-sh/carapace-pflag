@@ -227,6 +227,11 @@ func (s ArgumentStyle) AcceptsNext() bool {
 	return s == 0 || s&AcceptNext != 0
 }
 
+// DelimiterDisabled is the sentinel value for OptargDelimiter that disables
+// delimiter-based argument parsing. When set, attached values are parsed
+// directly (e.g. -rvalue) instead of requiring a delimiter (e.g. -r=value).
+const DelimiterDisabled rune = -1
+
 // A Flag represents the state of a flag.
 type Flag struct {
 	Name                string              // name as it appears on command line
@@ -244,6 +249,12 @@ type Flag struct {
 	OptargDelimiter     rune
 	Nargs               int
 	ArgumentStyle       // controls which argument variants are accepted
+}
+
+// HasDisabledDelimiter reports whether OptargDelimiter is set to the
+// sentinel value that disables delimiter-based argument parsing.
+func (f *Flag) HasDisabledDelimiter() bool {
+	return f.OptargDelimiter < 0x20
 }
 
 // Value is the interface to the dynamic value stored in a flag.
@@ -1181,6 +1192,11 @@ func (f *FlagSet) findShortFlag(s string) (*Flag, bool) {
 		if name := strings.SplitN(s, string(flag.OptargDelimiter), 2)[0]; name == shorthand {
 			return flag, true
 		}
+		// optarg flags with a non-standard delimiter (e.g. -1) accept
+		// directly attached values: "rvalue" matches shorthand "r"
+		if flag.NoOptDefVal != "" && flag.HasDisabledDelimiter() && strings.HasPrefix(s, shorthand) && len(s) > len(shorthand) && s[len(shorthand)] != '=' {
+			return flag, true
+		}
 	}
 	return nil, false
 }
@@ -1249,6 +1265,10 @@ func (f *FlagSet) parseSingleShortArg(shorthands string, args []string, fn parse
 		((shorthands[1] == byte(flag.OptargDelimiter) && f.IsPosix()) || (hasDelimiter && !f.IsPosix())) {
 		// '-f=arg'
 		value = strings.SplitN(shorthands, string(flag.OptargDelimiter), 2)[1]
+		outShorts = ""
+	} else if flag.NoOptDefVal != "" && flag.HasDisabledDelimiter() && flag.AcceptsAttached() && len(shorthands) > len(flag.Shorthand) && shorthands[len(flag.Shorthand)] != '=' {
+		// '-rvalue' (optarg flag with disabled delimiter, attached value)
+		value = shorthands[len(flag.Shorthand):]
 		outShorts = ""
 	} else if flag.NoOptDefVal != "" && flag.AcceptsDelimited() && (f.IsPosix() || shorthands == flag.Shorthand) {
 		// '-f' (arg was optional)
