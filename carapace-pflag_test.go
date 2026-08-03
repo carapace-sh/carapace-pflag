@@ -1765,3 +1765,232 @@ func TestCustomPrefixArgumentStyleReject(t *testing.T) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 }
+
+// TestOptargDelimiterDisabledPosix tests DelimiterDisabled in POSIX mode
+// (single-char shorthand). The attached-value logic should work the same
+// as in non-POSIX mode: -rvalue -> flag "r" with value "value".
+func TestOptargDelimiterDisabledPosix(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.StringP("r", "r", "", "recurse")
+	f.Lookup("r").NoOptDefVal = " "
+	f.Lookup("r").OptargDelimiter = DelimiterDisabled
+
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name, value)
+		return nil
+	}
+	err := f.ParseAll([]string{"-rvalue"}, store)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"r", "value"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// TestOptargDelimiterDisabledValueWithEquals tests that a value containing
+// '=' is parsed correctly: -rkey=value -> flag "r" with value "key=value".
+// The '=' is not treated as a delimiter when DelimiterDisabled is set.
+func TestOptargDelimiterDisabledValueWithEquals(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.StringS("r", "r", "", "recurse")
+	f.Lookup("r").NoOptDefVal = " "
+	f.Lookup("r").OptargDelimiter = DelimiterDisabled
+
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name, value)
+		return nil
+	}
+	err := f.ParseAll([]string{"-rkey=value"}, store)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"r", "key=value"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// TestOptargDelimiterDisabledValueStartingWithShorthandChar tests that a
+// value starting with the shorthand character is parsed correctly:
+// -rrrr -> flag "r" with value "rrr".
+func TestOptargDelimiterDisabledValueStartingWithShorthandChar(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.StringS("r", "r", "", "recurse")
+	f.Lookup("r").NoOptDefVal = " "
+	f.Lookup("r").OptargDelimiter = DelimiterDisabled
+
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name, value)
+		return nil
+	}
+	err := f.ParseAll([]string{"-rrrr"}, store)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"r", "rrr"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// TestOptargDelimiterDisabledCustomPrefix tests DelimiterDisabled with a
+// custom flag prefix: &rvalue -> flag "r" with value "value".
+func TestOptargDelimiterDisabledCustomPrefix(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.SetPrefix('&')
+	f.StringS("r", "r", "", "recurse")
+	f.Lookup("r").NoOptDefVal = " "
+	f.Lookup("r").OptargDelimiter = DelimiterDisabled
+
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name, value)
+		return nil
+	}
+	err := f.ParseAll([]string{"&rvalue"}, store)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"r", "value"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// TestOptargDelimiterDisabledMixed tests that flags with DelimiterDisabled
+// and flags with a normal '=' delimiter coexist on the same FlagSet.
+func TestOptargDelimiterDisabledMixed(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.StringS("r", "r", "", "recurse")
+	f.Lookup("r").NoOptDefVal = " "
+	f.Lookup("r").OptargDelimiter = DelimiterDisabled
+
+	f.StringP("v", "v", "", "verbose")
+	f.Lookup("v").NoOptDefVal = " "
+
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name, value)
+		return nil
+	}
+	err := f.ParseAll([]string{"-rvalue", "-v=2"}, store)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"r", "value", "v", "2"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// TestOptargDelimiterDisabledArgumentStyleInteraction tests that when
+// ArgumentStyle does not include AcceptsAttached, the DelimiterDisabled
+// attached-value branch is skipped and the flag falls through to other
+// parse paths (e.g. NoOptDefVal for bare flag, then remaining args as
+// positionals or shorthand chain).
+func TestOptargDelimiterDisabledArgumentStyleInteraction(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.StringS("r", "r", "", "recurse")
+	f.Lookup("r").NoOptDefVal = " "
+	f.Lookup("r").OptargDelimiter = DelimiterDisabled
+	f.Lookup("r").ArgumentStyle = AcceptDelimited | AcceptNext
+
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name, value)
+		return nil
+	}
+	// -rvalue should NOT parse as attached since AcceptsAttached is false.
+	// The bare flag -r uses NoOptDefVal, then "value" is not consumed by -r.
+	err := f.ParseAll([]string{"-rvalue"}, store)
+	if err != nil {
+		// In non-POSIX mode, after -r uses NoOptDefVal, "value" is treated
+		// as a shorthand which doesn't exist -> error is acceptable.
+		return
+	}
+	// If no error, the flag should have used NoOptDefVal, not attached value.
+	if len(got) >= 2 && got[1] == "value" {
+		t.Errorf("attached value was parsed despite AcceptsAttached=false")
+	}
+}
+
+// TestOptargDelimiterDisabledLongFlagNotSupported documents that
+// DelimiterDisabled has no effect on the long flag form (--flagvalue).
+// The long flag path (findLongFlag/parseLongArg) does not implement
+// attached-value parsing for disabled delimiters, so --flagvalue is
+// treated as an unknown flag name. This is a known limitation.
+func TestOptargDelimiterDisabledLongFlagNotSupported(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.StringP("recurse", "r", "", "recurse")
+	f.Lookup("recurse").NoOptDefVal = " "
+	f.Lookup("recurse").OptargDelimiter = DelimiterDisabled
+
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name, value)
+		return nil
+	}
+	// --recursevalue is looked up as flag name "recursevalue" (no delimiter
+	// splitting), which doesn't exist -> NotExistError.
+	err := f.ParseAll([]string{"--recursevalue"}, store)
+	if err == nil {
+		t.Fatal("expected error for --recursevalue with DelimiterDisabled, got nil")
+	}
+	var nce *NotExistError
+	if !errors.As(err, &nce) {
+		t.Fatalf("expected NotExistError, got %T: %v", err, err)
+	}
+}
+
+// TestOptargDelimiterDisabledPrefixAmbiguity documents that when two flags
+// have shorthands where one is a prefix of the other (e.g. "r" and "root"),
+// findShortFlag may match the shorter shorthand first due to map iteration
+// order. This is a known limitation of the current implementation.
+func TestOptargDelimiterDisabledPrefixAmbiguity(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.StringS("r", "r", "", "recurse")
+	f.Lookup("r").NoOptDefVal = " "
+	f.Lookup("r").OptargDelimiter = DelimiterDisabled
+
+	f.StringS("root", "root", "", "root")
+	f.Lookup("root").NoOptDefVal = " "
+	f.Lookup("root").OptargDelimiter = DelimiterDisabled
+
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name, value)
+		return nil
+	}
+	// -rootvalue could match either "r" (value="ootvalue") or "root"
+	// (value="value"). The current implementation matches whichever
+	// shorthand it encounters first in map iteration, which is
+	// non-deterministic. This test documents that the parse succeeds
+	// without error but may match either flag.
+	err := f.ParseAll([]string{"-rootvalue"}, store)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) < 2 {
+		t.Fatalf("expected flag to be parsed, got %v", got)
+	}
+	// Verify it matched one of the two possible flags.
+	if got[0] != "r" && got[0] != "root" {
+		t.Errorf("expected flag 'r' or 'root', got %q", got[0])
+	}
+	// Verify the value is consistent with whichever flag was matched.
+	var wantVal string
+	switch got[0] {
+	case "r":
+		wantVal = "ootvalue"
+	case "root":
+		wantVal = "value"
+	}
+	if got[1] != wantVal {
+		t.Errorf("for flag %q: got value %q, want %q", got[0], got[1], wantVal)
+	}
+}
