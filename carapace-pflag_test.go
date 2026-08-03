@@ -1286,7 +1286,7 @@ func TestOptargDelimiterDisabledNonPosix(t *testing.T) {
 			// multi-char shorthand makes IsPosix() return false
 			f.StringS("r", "r", "", "recurse")
 			f.Lookup("r").NoOptDefVal = " "
-			f.Lookup("r").OptargDelimiter = -1
+			f.Lookup("r").OptargDelimiter = DelimiterDisabled
 
 			got := []string{}
 			store := func(flag *Flag, value string) error {
