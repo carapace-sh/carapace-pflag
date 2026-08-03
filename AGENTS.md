@@ -65,7 +65,7 @@ These unexported/exported fields on `Flag` are the fork's reason for existing (d
 |-------|------|---------|---------|
 | `Mode` | `mode` (int) | `Default` | `Default` / `ShorthandOnly` / `NameAsShorthand` |
 | `Nargs` | `int` | `0` | `0`/`1` = one arg; `>1` = exactly N (joined CSV); `<0` = greedy until next `-` |
-| `OptargDelimiter` | `rune` | `'='` | Delimiter for attached args (e.g. `:` for `java -agentlib:jdwp`) |
+| `OptargDelimiter` | `rune` | `'='` | Delimiter for attached args (e.g. `:` for `java -agentlib:jdwp`); set to `DelimiterDisabled` (`-1`) to disable delimiter-based parsing and accept directly-attached values |
 | `ArgumentStyle` | `ArgumentStyle` (uint) | `0` (accept all) | Bitmask: `AcceptNext`, `AcceptDelimited`, `AcceptAttached` |
 
 `FlagSet.IsPosix()` returns false if **any** shorthand is multi-character (which happens when `NameAsShorthand`/`ShorthandOnly` registers long shorthand names). When non-POSIX, shorthand chaining (`-abc` = `-a -b -c`) is disabled.
@@ -86,7 +86,11 @@ The `FlagSet` has an unexported `prefix rune` field (default `'-'`) controlling 
 
 **What stays hardcoded**: `golangflag.go` always uses `-` for go test flags and stdlib interop — this is not affected by the custom prefix.
 
-### `ArgumentStyle` bitmask (current focus)
+### Disabled Delimiter (`DelimiterDisabled`)
+
+Setting `OptargDelimiter` to the sentinel constant `DelimiterDisabled` (`-1`, also any rune `< 0x20`) disables delimiter-based argument parsing. When combined with a non-empty `NoOptDefVal`, this allows directly-attached values without a delimiter character — e.g. `-rvalue` is parsed as flag `r` with value `value` instead of treating `rvalue` as an unknown shorthand. Use `flag.HasDisabledDelimiter()` to check this condition rather than comparing the raw rune value.
+
+### `ArgumentStyle` bitmask
 
 ```go
 type ArgumentStyle uint
@@ -97,10 +101,10 @@ const (
 )
 ```
 
-- **Zero value accepts all three** — this is the backward-compatible default. Methods `AcceptsNext/AcceptsDelimited/AcceptsAttached` all return `true` when `s == 0`.
+- **Zero value accepts all three** — this is the backward-compatible default. Methods `AcceptsNext`/`AcceptsDelimited`/`AcceptsAttached` all return `true` when `s == 0`.
 - Combine with OR: `AcceptDelimited | AcceptNext` allows only `--flag=val` and `--flag val`.
 - When a form is rejected, parsing returns `ValueRequiredError`.
-- The current branch (`argumentstyle`) is actively refining this; recent commits changed it from an enum to a bitmask and embedded it directly in `Flag` (no separate field name on access).
+- The bitmask is embedded directly in `Flag` (no separate field name on access — use `flag.ArgumentStyle` or the `Accepts*()` methods).
 
 ## Structured Errors (`errors.go`)
 
@@ -131,6 +135,8 @@ The fork replaces upstream's string-based `fmt.Errorf` with typed errors so cara
 - **`ParseErrorsWhitelist` is a deprecated alias** for `ParseErrorsAllowlist` (type alias, kept for backwards compat). Use `Allowlist` in new code; do not remove the alias.
 - **Deprecated stdlib usage is tolerated**: `export_test.go` uses `ioutil.Discard` and `golangflag.go` uses `reflect.Ptr` — gopls flags these as deprecated, but they exist for Go 1.12 compatibility. Don't "modernize" them without checking the minimum Go version constraint.
 - **carapace reads unexported fields via reflection**: the carapace library's `internal/pflagfork` accesses `Flag.Mode`, `Flag.Nargs`, `Flag.OptargDelimiter`, `FlagSet.interspersed`, `FlagSet.prefix`, and calls `FlagSet.IsPosix()` reflectively. Changing field names or method signatures here silently breaks carapace. The `carapace-spec` library has a separate slim read-only fork for code generation.
+- **Disabled delimiter enables direct attachment**: when `OptargDelimiter` is set to `DelimiterDisabled` (or any rune `< 0x20`) and `NoOptDefVal` is non-empty, the parser accepts directly-attached values (e.g. `-rvalue`) in both POSIX and non-POSIX mode. Always use `flag.HasDisabledDelimiter()` rather than raw comparisons.
+- **Custom prefix only affects the fork's own parser**: `golangflag.go` always uses `-` for go test flags and stdlib interop — this is not affected by the custom prefix.
 - **`NoOptDefVal` is set per-type, not per-flag**: registration methods for bool (`"true"`) and count (`"+1"`) types set this sentinel after construction so the bare flag form works (`--verbose`, `-v` repeating). For non-bool types it stays empty by default, but tests and callers routinely set it post-hoc via `f.Lookup("name").NoOptDefVal = "1"` to make a flag's value optional. The `count` type's `Set` specially interprets the `"+1"` sentinel to mean "increment" — do not reuse that value for other types.
 - **Value type families use different `Set` encodings**:
   - **Scalar** (`bool`, `int`, `duration`, …): straightforward `strconv` parse.
@@ -139,6 +145,11 @@ The fork replaces upstream's string-based `fmt.Errorf` with typed errors so cara
   - **Map** (`stringToInt`, `stringToInt64`, `stringToString`): `Set` parses `k=v,k2=v2`; `stringToString` additionally supports CSV quoting when the value contains `=`. The `string_to_*` files implement their own key/value parsing rather than reusing the slice CSV helpers.
 - **`Func`/`BoolFunc` are stdlib-parity features** added under `go1.21` build tags for their tests; the implementations themselves (in `func.go`, `bool_func.go`) are not build-tagged and must remain compatible with Go 1.12.
 
-## Branch Context
+## Recent Changes
 
-The `argumentstyle` branch (recent commits `0b0bad7` → `e7a35dd`) converted `ArgumentStyle` from a closed enum to an OR-able bitmask and embedded it directly into `Flag`. When extending argument-style logic, work against the bitmask semantics (zero = accept all, OR to combine) and the `Accepts*()` helper methods rather than re-deriving bit math at call sites.
+The following features have been merged into `master`:
+
+- **`ArgumentStyle` bitmask** (PR #29): Controls which argument forms a flag accepts (`AcceptNext`, `AcceptDelimited`, `AcceptAttached`). Zero value accepts all (backward compatible). Rejecting a form yields `ValueRequiredError`.
+- **Custom flag prefix** (PR #32): `FlagSet.SetPrefix(rune)` changes the prefix character (e.g. `&` for elvish). Affects token recognition, long/short disambiguation, terminator, error messages, and usage output. `Prefix()` returns `'-'` for zero-value safety.
+- **Disabled delimiter + attached values** (PR #33): `DelimiterDisabled` sentinel constant and `HasDisabledDelimiter()` method. When `OptargDelimiter` is disabled and `NoOptDefVal` is set, directly-attached values (e.g. `-rvalue`) are parsed as flag `r` with value `value`.
+- **Edge-case tests** (PR #31): Comprehensive tests for fork-specific parsing features (long shorthand, non-POSIX, optarg delimiter, Nargs, ArgumentStyle, custom prefix).

@@ -36,6 +36,34 @@ rootCmd.Flag("agentlib").NoOptDefVal = " "
 rootCmd.Flag("agentlib").OptargDelimiter = ':'
 ```
 
+Set `OptargDelimiter` to `pflag.DelimiterDisabled` to disable delimiter-based
+parsing and accept directly-attached values (e.g. `-rvalue` → flag `r`, value
+`value`):
+
+```go
+rootCmd.Flag("agentlib").OptargDelimiter = pflag.DelimiterDisabled
+rootCmd.Flag("agentlib").NoOptDefVal = " "
+```
+
+### Argument Style
+
+Control which argument forms a flag accepts using the `ArgumentStyle` bitmask.
+The zero value accepts all forms (backward compatible).
+
+```go
+rootCmd.Flag("verbose").ArgumentStyle = pflag.AcceptDelimited | pflag.AcceptNext
+// accepts: --verbose=val, --verbose val
+// rejects: --verboseval (attached)
+```
+
+### Custom Flag Prefix
+
+Change the flag prefix character (e.g. `&` for elvish) on a `FlagSet`:
+
+```go
+rootCmd.Flags().SetPrefix('&') // &flag, &&flag, && terminates
+```
+
 ### Nargs
 
 Support for flags consuming multiple arguments.
