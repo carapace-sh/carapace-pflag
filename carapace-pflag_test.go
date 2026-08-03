@@ -1245,6 +1245,71 @@ func TestArgumentStyleShorthandAttachedNonPosix(t *testing.T) {
 	}
 }
 
+// TestOptargDelimiterDisabledNonPosix tests that an optarg flag with
+// OptargDelimiter set to a control character (e.g. -1) in non-POSIX mode
+// parses directly attached values: -rvalue -> flag "r" with value "value".
+func TestOptargDelimiterDisabledNonPosix(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr bool
+		wantVal string
+	}{
+		{
+			name:    "attached value",
+			args:    []string{"-rvalue"},
+			wantErr: false,
+			wantVal: "value",
+		},
+		{
+			name:    "bare flag (no value, optarg)",
+			args:    []string{"-r"},
+			wantErr: false,
+		},
+		{
+			name:    "next arg style",
+			args:    []string{"-r", "value"},
+			wantErr: false,
+			// optarg: -r alone uses NoOptDefVal, "value" is a positional, not the flag value
+		},
+		{
+			name:    "delimiter not recognized",
+			args:    []string{"-r=value"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := NewFlagSet("test", ContinueOnError)
+			// StringS with same name and shorthand makes it ShorthandOnly;
+			// multi-char shorthand makes IsPosix() return false
+			f.StringS("r", "r", "", "recurse")
+			f.Lookup("r").NoOptDefVal = " "
+			f.Lookup("r").OptargDelimiter = -1
+
+			got := []string{}
+			store := func(flag *Flag, value string) error {
+				got = append(got, flag.Name, value)
+				return nil
+			}
+			err := f.ParseAll(tt.args, store)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.wantVal != "" && len(got) >= 2 && got[1] != tt.wantVal {
+				t.Errorf("got value %q, want %q", got[1], tt.wantVal)
+			}
+		})
+	}
+}
+
 // TestInvalidSyntaxErrorForDashDashEquals tests that --=value produces
 // an InvalidSyntaxError (name starts with '=').
 func TestInvalidSyntaxErrorForDashDashEquals(t *testing.T) {

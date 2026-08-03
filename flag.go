@@ -1181,6 +1181,11 @@ func (f *FlagSet) findShortFlag(s string) (*Flag, bool) {
 		if name := strings.SplitN(s, string(flag.OptargDelimiter), 2)[0]; name == shorthand {
 			return flag, true
 		}
+		// optarg flags with a non-standard delimiter (e.g. -1) accept
+		// directly attached values: "rvalue" matches shorthand "r"
+		if flag.NoOptDefVal != "" && flag.OptargDelimiter < 0x20 && strings.HasPrefix(s, shorthand) && len(s) > len(shorthand) && s[len(shorthand)] != '=' {
+			return flag, true
+		}
 	}
 	return nil, false
 }
@@ -1249,6 +1254,10 @@ func (f *FlagSet) parseSingleShortArg(shorthands string, args []string, fn parse
 		((shorthands[1] == byte(flag.OptargDelimiter) && f.IsPosix()) || (hasDelimiter && !f.IsPosix())) {
 		// '-f=arg'
 		value = strings.SplitN(shorthands, string(flag.OptargDelimiter), 2)[1]
+		outShorts = ""
+	} else if flag.NoOptDefVal != "" && flag.OptargDelimiter < 0x20 && flag.AcceptsAttached() && len(shorthands) > len(flag.Shorthand) && shorthands[len(flag.Shorthand)] != '=' {
+		// '-rvalue' (optarg flag with disabled delimiter, attached value)
+		value = shorthands[len(flag.Shorthand):]
 		outShorts = ""
 	} else if flag.NoOptDefVal != "" && flag.AcceptsDelimited() && (f.IsPosix() || shorthands == flag.Shorthand) {
 		// '-f' (arg was optional)
