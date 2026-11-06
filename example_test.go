@@ -34,3 +34,40 @@ func ExampleFlagSet_ShorthandLookup() {
 
 	fmt.Println(flag.Name)
 }
+
+func ExampleFlagSet_StringToString() {
+	args := []string{
+		"--arg", "a=1,b=2",
+		"--arg", "a=2",
+		"--arg=d=4",
+	}
+
+	fs := pflag.NewFlagSet("Example", pflag.ContinueOnError)
+	fs.StringToString("arg", make(map[string]string), "string-to-string arg accepting key=value pairs")
+
+	if err := fs.Parse(args); err != nil {
+		panic(err)
+	}
+
+	value, err := fs.GetStringToString("arg")
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(value)
+	// Output: map[a:2 b:2 d:4]
+}
+
+func ExampleFlagSet_SetInterspersed() {
+	flags := pflag.NewFlagSet("wrapper", pflag.ContinueOnError)
+	verbose := flags.Bool("verbose", false, "verbose output")
+	flags.SetInterspersed(false)
+	if err := flags.Parse([]string{"--verbose", "echo", "--verbose", "hello"}); err != nil {
+		panic(err)
+	}
+	fmt.Println(*verbose)
+	fmt.Println(flags.Args())
+	// Output:
+	// true
+	// [echo --verbose hello]
+}
