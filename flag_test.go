@@ -20,15 +20,16 @@ import (
 )
 
 var (
-	testBool                     = Bool("test_bool", false, "bool value")
-	testInt                      = Int("test_int", 0, "int value")
-	testInt64                    = Int64("test_int64", 0, "int64 value")
-	testUint                     = Uint("test_uint", 0, "uint value")
-	testUint64                   = Uint64("test_uint64", 0, "uint64 value")
-	testString                   = String("test_string", "0", "string value")
-	testFloat                    = Float64("test_float64", 0, "float64 value")
-	testDuration                 = Duration("test_duration", 0, "time.Duration value")
-	testOptionalInt              = Int("test_optional_int", 0, "optional int value")
+	_ = Bool("test_bool", false, "bool value")
+	_ = Int("test_int", 0, "int value")
+	_ = Int64("test_int64", 0, "int64 value")
+	_ = Uint("test_uint", 0, "uint value")
+	_ = Uint64("test_uint64", 0, "uint64 value")
+	_ = String("test_string", "0", "string value")
+	_ = Float64("test_float64", 0, "float64 value")
+	_ = Duration("test_duration", 0, "time.Duration value")
+	_ = Int("test_optional_int", 0, "optional int value")
+
 	normalizeFlagNameInvocations = 0
 )
 
@@ -75,15 +76,33 @@ func TestEverything(t *testing.T) {
 		}
 	}
 	// Now set all flags
-	Set("test_bool", "true")
-	Set("test_int", "1")
-	Set("test_int64", "1")
-	Set("test_uint", "1")
-	Set("test_uint64", "1")
-	Set("test_string", "1")
-	Set("test_float64", "1")
-	Set("test_duration", "1s")
-	Set("test_optional_int", "1")
+	if err := Set("test_bool", "true"); err != nil {
+		t.Error(err)
+	}
+	if err := Set("test_int", "1"); err != nil {
+		t.Error(err)
+	}
+	if err := Set("test_int64", "1"); err != nil {
+		t.Error(err)
+	}
+	if err := Set("test_uint", "1"); err != nil {
+		t.Error(err)
+	}
+	if err := Set("test_uint64", "1"); err != nil {
+		t.Error(err)
+	}
+	if err := Set("test_string", "1"); err != nil {
+		t.Error(err)
+	}
+	if err := Set("test_float64", "1"); err != nil {
+		t.Error(err)
+	}
+	if err := Set("test_duration", "1s"); err != nil {
+		t.Error(err)
+	}
+	if err := Set("test_optional_int", "1"); err != nil {
+		t.Error(err)
+	}
 	desired = "1"
 	Visit(visitor)
 	if len(m) != 9 {
@@ -376,7 +395,7 @@ func testParse(f *FlagSet, t *testing.T) {
 	}
 	// Test invalid
 	err = f.Parse([]string{"--bool=abcdefg"})
-	expectedErr = `invalid argument "abcdefg" for "--bool" flag: strconv.ParseBool: parsing "abcdefg": invalid syntax`
+	expectedErr = `invalid argument "abcdefg" for "--bool" flag: must be true or false`
 	if err == nil {
 		t.Error("parse did not fail for invalid argument")
 	}
@@ -523,6 +542,116 @@ func testParseWithUnknownFlags(f *FlagSet, t *testing.T, setUnknownFlags func(f 
 	}
 }
 
+func testParseWithUnknownFlagsAndPassToArgs(f *FlagSet, t *testing.T, setUp ...func(*FlagSet)) {
+	if f.Parsed() {
+		t.Fatal("f.Parse() = true before Parse")
+	}
+	if len(setUp) == 0 {
+		f.ParseErrorsAllowlist.UnknownFlagsHandling = PassUnknownFlagToArgs
+	}
+	for _, s := range setUp {
+		s(f)
+	}
+	f.SetInterspersed(true)
+
+	f.BoolP("boola", "a", false, "bool value")
+	f.BoolP("boolb", "b", false, "bool2 value")
+	f.BoolP("boolc", "c", false, "bool3 value")
+	f.BoolP("boold", "d", false, "bool4 value")
+	f.BoolP("boole", "e", false, "bool4 value")
+	f.StringP("stringa", "s", "0", "string value")
+	f.StringP("stringz", "z", "0", "string value")
+	f.StringP("stringx", "x", "0", "string value")
+	f.StringP("stringy", "y", "0", "string value")
+	f.StringP("stringo", "o", "0", "string value")
+	f.Lookup("stringx").NoOptDefVal = "1"
+	args := []string{
+		"-ab",
+		// -f and -g is unknown
+		"-fcgs=xx",
+		"--stringz=something",
+		"--unknown1",
+		"unknown1Value",
+		"-d=true",
+		"-x",
+		"--unknown2=unknown2Value",
+		"-u=unknown3Value",
+		"-p",
+		"unknown4Value",
+		"-q", //another unknown with bool value
+		"-y",
+		"ee",
+		"--unknown7=unknown7value",
+		"--stringo=ovalue",
+		"--unknown8=unknown8value",
+		"--boole",
+		"--unknown6",
+		"",
+		"-uuuuu",
+		"",
+		"--unknown10",
+		"--unknown11",
+		"arg0",
+		"arg1",
+	}
+	want := []string{
+		"boola", "true",
+		"boolb", "true",
+		"boolc", "true",
+		"stringa", "xx",
+		"stringz", "something",
+		"boold", "true",
+		"stringx", "1",
+		"stringy", "ee",
+		"stringo", "ovalue",
+		"boole", "true",
+	}
+	wantArgs := []string{
+		"-fg",
+		"--unknown1",
+		"unknown1Value",
+		"--unknown2=unknown2Value",
+		"-u=unknown3Value",
+		"-p",
+		"unknown4Value",
+		"-q", //another unknown with bool value
+		"--unknown7=unknown7value",
+		"--unknown8=unknown8value",
+		"--unknown6",
+		"",
+		"-uuuuu",
+		"",
+		"--unknown10",
+		"--unknown11",
+		"arg0",
+		"arg1",
+	}
+	got := []string{}
+	store := func(flag *Flag, value string) error {
+		got = append(got, flag.Name)
+		if len(value) > 0 {
+			got = append(got, value)
+		}
+		return nil
+	}
+	if err := f.ParseAll(args, store); err != nil {
+		t.Errorf("expected no error, got %s", err)
+	}
+	if !f.Parsed() {
+		t.Errorf("f.Parse() = false after Parse")
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("f.ParseAll() fail to restore the args")
+		t.Errorf("Got:  %v", got)
+		t.Errorf("Want: %v", want)
+	}
+	if !reflect.DeepEqual(f.Args(), wantArgs) {
+		t.Errorf("f.ParseAll() fail to restore the args")
+		t.Errorf("Got:  %v", f.Args())
+		t.Errorf("Want: %v", wantArgs)
+	}
+}
+
 func TestShorthand(t *testing.T) {
 	f := NewFlagSet("shorthand", ContinueOnError)
 	if f.Parsed() {
@@ -645,7 +774,7 @@ func TestShorthandLookup(t *testing.T) {
 	}
 	flag := f.ShorthandLookup("a")
 	if flag == nil {
-		t.Errorf("f.ShorthandLookup(\"a\") returned nil")
+		t.Fatal("f.ShorthandLookup(\"a\") returned nil")
 	}
 	if flag != nil && flag.Name != "boola" {
 		t.Errorf("f.ShorthandLookup(\"a\") found %q instead of \"boola\"", flag.Name)
@@ -655,9 +784,9 @@ func TestShorthandLookup(t *testing.T) {
 		t.Errorf("f.ShorthandLookup(\"\") did not return nil")
 	}
 	defer func() {
-		recover()
+		_ = recover()
 	}()
-	f.ShorthandLookup("ab")
+	_ = f.ShorthandLookup("ab")
 	// should NEVER get here. lookup should panic. defer'd func should recover it.
 	//	t.Errorf("f.ShorthandLookup(\"ab\") did not panic")
 }
@@ -665,6 +794,43 @@ func TestShorthandLookup(t *testing.T) {
 func TestParse(t *testing.T) {
 	ResetForTesting(func() { t.Error("bad parse") })
 	testParse(GetCommandLine(), t)
+}
+
+// TestInvalidArgumentMessages locks in the human-readable suffixes returned
+// when typed flags fail to parse their input, replacing the prior raw stdlib
+// errors (e.g. `strconv.ParseBool: parsing "x": invalid syntax`).
+func TestInvalidArgumentMessages(t *testing.T) {
+	cases := []struct {
+		flag     string
+		register func(*FlagSet)
+		raw      string
+		want     string
+	}{
+		{"bool", func(f *FlagSet) { f.Bool("bool", false, "") }, "x",
+			`invalid argument "x" for "--bool" flag: must be true or false`},
+		{"int", func(f *FlagSet) { f.Int("int", 0, "") }, "x",
+			`invalid argument "x" for "--int" flag: must be an integer`},
+		{"uint", func(f *FlagSet) { f.Uint("uint", 0, "") }, "-1",
+			`invalid argument "-1" for "--uint" flag: must be a non-negative integer`},
+		{"float64", func(f *FlagSet) { f.Float64("float64", 0, "") }, "x",
+			`invalid argument "x" for "--float64" flag: must be a number`},
+		{"duration", func(f *FlagSet) { f.Duration("duration", 0, "") }, "soon",
+			`invalid argument "soon" for "--duration" flag: must be a duration like "30s" or "5m"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.flag, func(t *testing.T) {
+			f := NewFlagSet("test", ContinueOnError)
+			f.SetOutput(ioutil.Discard)
+			tc.register(f)
+			err := f.Parse([]string{"--" + tc.flag + "=" + tc.raw})
+			if err == nil {
+				t.Fatalf("expected error parsing --%s=%q, got nil", tc.flag, tc.raw)
+			}
+			if err.Error() != tc.want {
+				t.Errorf("expected %q, got %q", tc.want, err.Error())
+			}
+		})
+	}
 }
 
 func TestParseAll(t *testing.T) {
@@ -682,6 +848,17 @@ func TestIgnoreUnknownFlagsBackwardsCompat(t *testing.T) {
 	testParseWithUnknownFlags(GetCommandLine(), t, func(f *FlagSet) { f.ParseErrorsWhitelist.UnknownFlags = true })
 }
 
+func TestIgnoreUnknownFlagsAndPassToArgs(t *testing.T) {
+	ResetForTesting(func() { t.Error("bad parse") })
+	testParseWithUnknownFlagsAndPassToArgs(GetCommandLine(), t)
+}
+
+func TestIgnoreUnknownFlagsAndPassToArgsBackwardsCompat(t *testing.T) {
+	ResetForTesting(func() { t.Error("bad parse") })
+	testParseWithUnknownFlagsAndPassToArgs(GetCommandLine(), t, func(f *FlagSet) {
+		f.ParseErrorsWhitelist.UnknownFlagsHandling = PassUnknownFlagToArgs
+	})
+}
 func TestFlagSetParse(t *testing.T) {
 	testParse(NewFlagSet("test", ContinueOnError), t)
 }
@@ -757,18 +934,18 @@ func TestChangedHelper(t *testing.T) {
 	}
 }
 
-func replaceSeparators(name string, from []string, to string) string {
+func toDotSeparated(name string, from []string) string {
 	result := name
 	for _, sep := range from {
-		result = strings.Replace(result, sep, to, -1)
+		result = strings.ReplaceAll(result, sep, ".")
 	}
 	// Type convert to indicate normalization has been done.
 	return result
 }
 
-func wordSepNormalizeFunc(f *FlagSet, name string) NormalizedName {
+func wordSepNormalizeFunc(_ *FlagSet, name string) NormalizedName {
 	seps := []string{"-", "_"}
-	name = replaceSeparators(name, seps, ".")
+	name = toDotSeparated(name, seps)
 	normalizeFlagNameInvocations++
 
 	return NormalizedName(name)
@@ -824,13 +1001,13 @@ func TestWordSepNormalizedNames(t *testing.T) {
 	testWordSepNormalizedNames(args, t)
 }
 
-func aliasAndWordSepFlagNames(f *FlagSet, name string) NormalizedName {
+func aliasAndWordSepFlagNames(_ *FlagSet, name string) NormalizedName {
 	seps := []string{"-", "_"}
 
-	oldName := replaceSeparators("old-valid_flag", seps, ".")
-	newName := replaceSeparators("valid-flag", seps, ".")
+	oldName := toDotSeparated("old-valid_flag", seps)
+	newName := toDotSeparated("valid-flag", seps)
 
-	name = replaceSeparators(name, seps, ".")
+	name = toDotSeparated(name, seps)
 	switch name {
 	case oldName:
 		name = newName
@@ -931,7 +1108,9 @@ func TestNormalizationSetFlags(t *testing.T) {
 	}
 
 	f.Bool(testName, false, "bool value")
-	f.Set(testName, "true")
+	if err := f.Set(testName, "true"); err != nil {
+		t.Error(err)
+	}
 	f.SetNormalizeFunc(nfunc)
 
 	if len(f.formal) != 1 {
@@ -989,7 +1168,12 @@ func TestSetOutput(t *testing.T) {
 	var buf bytes.Buffer
 	flags.SetOutput(&buf)
 	flags.Init("test", ContinueOnError)
-	flags.Parse([]string{"--unknown"})
+
+	expectedErr := "unknown flag: --unknown"
+	err := flags.Parse([]string{"--unknown"})
+	if err == nil || err.Error() != expectedErr {
+		t.Errorf("expected error %q got %v", expectedErr, err)
+	}
 	if out := buf.String(); !strings.Contains(out, "--unknown") {
 		t.Logf("expected output mentioning unknown; got %q", out)
 	}
@@ -1000,7 +1184,7 @@ func TestOutput(t *testing.T) {
 	var buf bytes.Buffer
 	expect := "an example string"
 	flags.SetOutput(&buf)
-	fmt.Fprint(flags.Output(), expect)
+	_, _ = fmt.Fprint(flags.Output(), expect)
 	if out := buf.String(); !strings.Contains(out, expect) {
 		t.Errorf("expected output %q; got %q", expect, out)
 	}
@@ -1052,7 +1236,7 @@ func TestHelp(t *testing.T) {
 	if err == nil {
 		t.Fatal("error expected")
 	}
-	if err != ErrHelp {
+	if err != ErrHelp { //nolint:errorlint // not using errors.Is for compatibility with go1.12
 		t.Fatal("expected ErrHelp; got ", err)
 	}
 	if !helpCalled {
@@ -1126,7 +1310,7 @@ func TestTermination(t *testing.T) {
 func getDeprecatedFlagSet() *FlagSet {
 	f := NewFlagSet("bob", ContinueOnError)
 	f.Bool("badflag", true, "always true")
-	f.MarkDeprecated("badflag", "use --good-flag instead")
+	_ = f.MarkDeprecated("badflag", "use --good-flag instead")
 	return f
 }
 
@@ -1167,7 +1351,7 @@ func TestDeprecatedFlagShorthandInDocs(t *testing.T) {
 	f := NewFlagSet("bob", ContinueOnError)
 	name := "noshorthandflag"
 	f.BoolP(name, "n", true, "always true")
-	f.MarkShorthandDeprecated("noshorthandflag", fmt.Sprintf("use --%s instead", name))
+	_ = f.MarkShorthandDeprecated("noshorthandflag", fmt.Sprintf("use --%s instead", name))
 
 	out := new(bytes.Buffer)
 	f.SetOutput(out)
@@ -1179,6 +1363,7 @@ func TestDeprecatedFlagShorthandInDocs(t *testing.T) {
 }
 
 func parseReturnStderr(t *testing.T, f *FlagSet, args []string) (string, error) {
+	t.Helper()
 	oldStderr := os.Stderr
 	r, w, _ := os.Pipe()
 	os.Stderr = w
@@ -1189,11 +1374,11 @@ func parseReturnStderr(t *testing.T, f *FlagSet, args []string) (string, error) 
 	// copy the output in a separate goroutine so printing can't block indefinitely
 	go func() {
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, _ = io.Copy(&buf, r)
 		outC <- buf.String()
 	}()
 
-	w.Close()
+	_ = w.Close()
 	os.Stderr = oldStderr
 	out := <-outC
 
@@ -1204,7 +1389,7 @@ func TestDeprecatedFlagUsage(t *testing.T) {
 	f := NewFlagSet("bob", ContinueOnError)
 	f.Bool("badflag", true, "always true")
 	usageMsg := "use --good-flag instead"
-	f.MarkDeprecated("badflag", usageMsg)
+	_ = f.MarkDeprecated("badflag", usageMsg)
 
 	args := []string{"--badflag"}
 	out, err := parseReturnStderr(t, f, args)
@@ -1222,7 +1407,7 @@ func TestDeprecatedFlagShorthandUsage(t *testing.T) {
 	name := "noshorthandflag"
 	f.BoolP(name, "n", true, "always true")
 	usageMsg := fmt.Sprintf("use --%s instead", name)
-	f.MarkShorthandDeprecated(name, usageMsg)
+	_ = f.MarkShorthandDeprecated(name, usageMsg)
 
 	args := []string{"-n"}
 	out, err := parseReturnStderr(t, f, args)
@@ -1240,7 +1425,7 @@ func TestDeprecatedFlagUsageNormalized(t *testing.T) {
 	f.Bool("bad-double_flag", true, "always true")
 	f.SetNormalizeFunc(wordSepNormalizeFunc)
 	usageMsg := "use --good-flag instead"
-	f.MarkDeprecated("bad_double-flag", usageMsg)
+	_ = f.MarkDeprecated("bad_double-flag", usageMsg)
 
 	args := []string{"--bad_double_flag"}
 	out, err := parseReturnStderr(t, f, args)
@@ -1250,6 +1435,33 @@ func TestDeprecatedFlagUsageNormalized(t *testing.T) {
 
 	if !strings.Contains(out, usageMsg) {
 		t.Errorf("usageMsg not printed when using a deprecated flag!")
+	}
+}
+
+func TestDeprecatedFlagUsageAlias(t *testing.T) {
+	// When a NormalizeFunc aliases one flag name to another, using the alias
+	// to set a deprecated flag should report the name the user actually typed,
+	// not the canonical name. See https://github.com/spf13/pflag/issues/279.
+	f := NewFlagSet("bob", ContinueOnError)
+	f.String("src", "", "src directory or file")
+	f.SetNormalizeFunc(func(_ *FlagSet, name string) NormalizedName {
+		if name == "dir" {
+			name = "src"
+		}
+		return NormalizedName(name)
+	})
+	_ = f.MarkDeprecated("src", "use --dest")
+
+	out, err := parseReturnStderr(t, f, []string{"--dir=x"})
+	if err != nil {
+		t.Fatal("expected no error; got ", err)
+	}
+
+	if !strings.Contains(out, "Flag --dir has been deprecated") {
+		t.Errorf("expected the deprecation message to name the flag the user typed (--dir); got: %q", out)
+	}
+	if strings.Contains(out, "Flag --src has been deprecated") {
+		t.Errorf("deprecation message should not name the canonical flag (--src); got: %q", out)
 	}
 }
 
@@ -1269,7 +1481,7 @@ func TestMultipleNormalizeFlagNameInvocations(t *testing.T) {
 func TestHiddenFlagInUsage(t *testing.T) {
 	f := NewFlagSet("bob", ContinueOnError)
 	f.Bool("secretFlag", true, "shhh")
-	f.MarkHidden("secretFlag")
+	_ = f.MarkHidden("secretFlag")
 
 	out := new(bytes.Buffer)
 	f.SetOutput(out)
@@ -1283,7 +1495,7 @@ func TestHiddenFlagInUsage(t *testing.T) {
 func TestHiddenFlagUsage(t *testing.T) {
 	f := NewFlagSet("bob", ContinueOnError)
 	f.Bool("secretFlag", true, "shhh")
-	f.MarkHidden("secretFlag")
+	_ = f.MarkHidden("secretFlag")
 
 	args := []string{"--secretFlag"}
 	out, err := parseReturnStderr(t, f, args)
@@ -1296,28 +1508,28 @@ func TestHiddenFlagUsage(t *testing.T) {
 	}
 }
 
-const defaultOutput = `      --A                         for bootstrapping, allow 'any' type
-      --Alongflagname             disable bounds checking
-  -C, --CCC                       a boolean defaulting to true (default true)
-      --D path                    set relative path for local imports
-  -E, --EEE num[=1234]            a num with NoOptDefVal (default 4321)
-      --F number                  a non-zero number (default 2.7)
-      --G float                   a float that defaults to zero
-      --IP ip                     IP address with no default
-      --IPMask ipMask             Netmask address with no default
-      --IPNet ipNet               IP network with no default
-      --Ints ints                 int slice with zero default
-      --N int                     a non-zero int (default 27)
-      --ND1 string[="bar"]        a string with NoOptDefVal (default "foo")
-      --ND2 num[=4321]            a num with NoOptDefVal (default 1234)
-      --StringArray stringArray   string array with zero default
-      --StringSlice strings       string slice with zero default
-      --Z int                     an int that defaults to zero
-      --custom custom             custom Value implementation
-      --custom-with-val custom    custom value which has been set from command line while help is shown
-      --customP custom            a VarP with default (default 10)
-      --maxT timeout              set timeout for dial
-  -v, --verbose count             verbosity
+const defaultOutput = `      --A[=true|false]               for bootstrapping, allow 'any' type
+      --Alongflagname[=true|false]   disable bounds checking
+  -C, --CCC[=true|false]             a boolean defaulting to true (default true)
+      --D path                       set relative path for local imports
+  -E, --EEE num[=1234]               a num with NoOptDefVal (default 4321)
+      --F number                     a non-zero number (default 2.7)
+      --G float                      a float that defaults to zero
+      --IP ip                        IP address with no default
+      --IPMask ipMask                Netmask address with no default
+      --IPNet ipNet                  IP network with no default
+      --Ints ints                    int slice with zero default
+      --N int                        a non-zero int (default 27)
+      --ND1 string[="bar"]           a string with NoOptDefVal (default "foo")
+      --ND2 num[=4321]               a num with NoOptDefVal (default 1234)
+      --StringArray stringArray      string array with zero default
+      --StringSlice strings          string slice with zero default
+      --Z int                        an int that defaults to zero
+      --custom custom                custom Value implementation
+      --custom-with-val custom       custom value which has been set from command line while help is shown
+      --customP custom               a VarP with default (default 10)
+      --maxT timeout                 set timeout for dial
+  -v, --verbose count                verbosity
 `
 
 // Custom value that satisfies the Value interface.
@@ -1332,6 +1544,20 @@ func (cv *customValue) Set(s string) error {
 }
 
 func (cv *customValue) Type() string { return "custom" }
+
+type customBoolFlagValue bool
+
+func (cv *customBoolFlagValue) String() string { return strconv.FormatBool(bool(*cv)) }
+
+func (cv *customBoolFlagValue) Set(s string) error {
+	v, err := strconv.ParseBool(s)
+	*cv = customBoolFlagValue(v)
+	return err
+}
+
+func (cv *customBoolFlagValue) Type() string { return "custom-bool" }
+
+func (cv *customBoolFlagValue) IsBoolFlag() bool { return true }
 
 func TestPrintDefaults(t *testing.T) {
 	fs := NewFlagSet("print defaults test", ContinueOnError)
@@ -1381,11 +1607,41 @@ func TestPrintDefaults(t *testing.T) {
 	}
 }
 
+func TestCustomIsBoolFlagDefaultIsZeroValue(t *testing.T) {
+	var v customBoolFlagValue
+	flag := &Flag{
+		Name:     "custom-bool",
+		Usage:    "custom bool",
+		Value:    &v,
+		DefValue: "",
+	}
+
+	if !flag.defaultIsZeroValue() {
+		t.Fatal("expected empty default for custom IsBoolFlag value to be treated as zero value")
+	}
+}
+
+func TestPrintDefaultsCustomIsBoolFlagOmitsDefault(t *testing.T) {
+	fs := NewFlagSet("print defaults custom bool", ContinueOnError)
+	var buf bytes.Buffer
+	fs.SetOutput(&buf)
+
+	var v customBoolFlagValue
+	fs.Var(&v, "custom-bool", "custom bool value implementation")
+
+	fs.PrintDefaults()
+	got := buf.String()
+	want := "      --custom-bool[=true]   custom bool value implementation\n"
+	if got != want {
+		t.Errorf("\n--- Got:\n%s--- Wanted:\n%s\n", got, want)
+	}
+}
+
 func TestVisitAllFlagOrder(t *testing.T) {
 	fs := NewFlagSet("TestVisitAllFlagOrder", ContinueOnError)
 	fs.SortFlags = false
 	// https://github.com/spf13/pflag/issues/120
-	fs.SetNormalizeFunc(func(f *FlagSet, name string) NormalizedName {
+	fs.SetNormalizeFunc(func(_ *FlagSet, name string) NormalizedName {
 		return NormalizedName(name)
 	})
 
@@ -1409,7 +1665,9 @@ func TestVisitFlagOrder(t *testing.T) {
 	names := []string{"C", "B", "A", "D"}
 	for _, name := range names {
 		fs.Bool(name, false, "")
-		fs.Set(name, "true")
+		if err := fs.Set(name, "true"); err != nil {
+			t.Error(err)
+		}
 	}
 
 	i := 0

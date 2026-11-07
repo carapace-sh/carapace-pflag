@@ -6,12 +6,12 @@ import (
 	"testing"
 )
 
-const expectedOutput = `      --long-form    Some description
-      --long-form2   Some description
-                       with multiline
-  -s, --long-name    Some description
-  -t, --long-name2   Some description with
-                       multiline
+const expectedOutput = `      --long-form[=true|false]    Some description
+      --long-form2[=true|false]   Some description
+                                    with multiline
+  -s, --long-name[=true|false]    Some description
+  -t, --long-name2[=true|false]   Some description with
+                                    multiline
 `
 
 func setUpPFlagSet(buf io.Writer) *FlagSet {
@@ -47,11 +47,11 @@ func setUpPFlagSet2(buf io.Writer) *FlagSet {
 	return f
 }
 
-const expectedOutput2 = `      --long-form                    Some description
-      --long-form2                   Some description
+const expectedOutput2 = `      --long-form[=true|false]       Some description
+      --long-form2[=true|false]      Some description
                                        with multiline
-  -s, --long-name                    Some description
-  -t, --long-name2                   Some description with
+  -s, --long-name[=true|false]       Some description
+  -t, --long-name2[=true|false]      Some description with
                                        multiline
   -o, --other-very-long-arg string   Some very long description having
                                      break the limit (default
@@ -69,6 +69,22 @@ func TestPrintUsage_2(t *testing.T) {
 	f := setUpPFlagSet2(&buf)
 	res := f.FlagUsagesWrapped(80)
 	if res != expectedOutput2 {
-		t.Errorf("Expected \n%q \nActual \n%q", expectedOutput2, res)
+		t.Errorf("Expected \n%s \nActual \n%s", expectedOutput2, res)
+	}
+}
+
+// A word wider than the description column must sit on its own line.
+// Wrapping has to resume for the words after it (#501).
+func TestFlagUsagesWrappedContinuesAfterUnbreakableWord(t *testing.T) {
+	f := NewFlagSet("example", ContinueOnError)
+	f.String("mount", "", "a mount specification e.g. 'type=bind,source=/opt,destination=/hostopt'. The rest of this description is never wrapped.")
+	got := f.FlagUsagesWrapped(60)
+	want := `      --mount string   a mount specification e.g.
+                       'type=bind,source=/opt,destination=/hostopt'.
+                       The rest of this description is
+                       never wrapped.
+`
+	if got != want {
+		t.Errorf("FlagUsagesWrapped(60)\nwant:\n%q\ngot:\n%q", want, got)
 	}
 }
