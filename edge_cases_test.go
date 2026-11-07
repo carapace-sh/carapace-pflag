@@ -136,3 +136,45 @@ func TestEdgeTopLevelPrefix(t *testing.T) {
 		t.Errorf("expected '-', got %q", CommandLine.Prefix())
 	}
 }
+
+func TestEdgeDisabledDelimiterPrefersLongestShorthand(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.StringS("r", "r", "", "recurse")
+	f.Lookup("r").NoOptDefVal = " "
+	f.Lookup("r").OptargDelimiter = DelimiterDisabled
+
+	f.StringS("root", "root", "", "root")
+	f.Lookup("root").NoOptDefVal = " "
+	f.Lookup("root").OptargDelimiter = DelimiterDisabled
+
+	got := []string{}
+	store := func(flag *Flag, value string) error { got = append(got, flag.Name, value); return nil }
+	if err := f.ParseAll([]string{"-rootvalue"}, store); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"root", "value"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestEdgeDisabledDelimiterExactShorthandPriority(t *testing.T) {
+	f := NewFlagSet("test", ContinueOnError)
+	f.StringS("rvalue", "rvalue", "", "rvalue")
+	f.Lookup("rvalue").NoOptDefVal = "default"
+
+	f.StringS("r", "r", "", "recurse")
+	f.Lookup("r").NoOptDefVal = " "
+	f.Lookup("r").OptargDelimiter = DelimiterDisabled
+
+	got := []string{}
+	store := func(flag *Flag, value string) error { got = append(got, flag.Name, value); return nil }
+	if err := f.ParseAll([]string{"-rvalue"}, store); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// exact shorthand "rvalue" takes priority over attached "r"+value
+	want := []string{"rvalue", "default"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
