@@ -1,3 +1,4 @@
+version: 2
 project_name: carapace-pflag
-build:
-  skip: true
+builds:
+  - skip: true
