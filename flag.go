@@ -1280,15 +1280,30 @@ func (f *FlagSet) parseNargs(flag *Flag, args []string) (value string, outargs [
 }
 
 func (f *FlagSet) findShortFlag(s string) (*Flag, bool) {
+	// Exact shorthand match takes priority.
 	for shorthand, flag := range f.shorthands {
 		if name := strings.SplitN(s, string(flag.OptargDelimiter), 2)[0]; name == shorthand {
 			return flag, true
 		}
-		// optarg flags with a non-standard delimiter (e.g. -1) accept
-		// directly attached values: "rvalue" matches shorthand "r"
-		if flag.NoOptDefVal != "" && flag.HasDisabledDelimiter() && strings.HasPrefix(s, shorthand) && len(s) > len(shorthand) && s[len(shorthand)] != '=' {
-			return flag, true
+	}
+	// optarg flags with a disabled delimiter accept directly attached
+	// values: "rvalue" matches shorthand "r". Prefer the longest matching
+	// shorthand to reduce ambiguity when one shorthand is a prefix of
+	// another.
+	var best *Flag
+	bestLen := 0
+	for shorthand, flag := range f.shorthands {
+		if flag.NoOptDefVal != "" && flag.HasDisabledDelimiter() &&
+			strings.HasPrefix(s, shorthand) && len(s) > len(shorthand) &&
+			s[len(shorthand)] != '=' {
+			if len(shorthand) > bestLen {
+				best = flag
+				bestLen = len(shorthand)
+			}
 		}
+	}
+	if best != nil {
+		return best, true
 	}
 	return nil, false
 }
@@ -1578,6 +1593,11 @@ func SetInterspersed(interspersed bool) {
 // SetPrefix sets the flag prefix character for the default command-line FlagSet.
 func SetPrefix(r rune) {
 	CommandLine.SetPrefix(r)
+}
+
+// Prefix returns the flag prefix character for the default command-line FlagSet.
+func Prefix() rune {
+	return CommandLine.Prefix()
 }
 
 // Parsed returns true if the command-line flags have been parsed.
