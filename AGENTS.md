@@ -20,7 +20,7 @@ go install honnef.co/go/tools/cmd/staticcheck@latest && staticcheck ./...  # lin
 
 - **Go version**: `go.mod` declares `go 1.12`. CI runs on Go 1.25.1. Do not use language features newer than 1.12 in non-build-tagged files (e.g. `errors.Is` requires 1.13 — the project historically avoided it; see commit `c5b9e98`).
 - **staticcheck config**: `staticcheck.conf` sets `checks = ["all", "-U1000"]` — enables all checks except `U1000` (unused parameter). The unused-parameter check is disabled because inherited upstream tests have intentionally-unused parameters.
-- **Releases**: `.goreleaser.yml` has `build.skip: true` — this is a library with no binary artifacts; goreleaser only handles tagging/changelog on tag pushes.
+- **Releases**: `.goreleaser.yml` has `builds: [{skip: true}]` (v2 format) — this is a library with no binary artifacts; goreleaser only handles tagging/changelog on tag pushes.
 - **CI workflow**: `.github/workflows/go.yml` runs build, test, `gofmt -d -s` check, goveralls coverage upload, and staticcheck on every push/PR.
 
 ## Architecture and Code Organization
